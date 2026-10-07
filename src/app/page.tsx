@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import "./dashboard.css";
+import "./auth.css";
 import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 import {
   Trophy,
   Calendar as CalendarIcon,
@@ -17,7 +19,11 @@ import {
   BarChart3,
   Dumbbell,
   Loader2,
-  Trash2
+  Trash2,
+  LogOut,
+  Mail,
+  Lock,
+  ArrowRight
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -52,13 +58,26 @@ const initialPerformanceData = [
 ];
 
 export default function FootballDashboard() {
+  // Estado de sesión de usuario
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Estados del formulario Auth (Login / Registro)
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccessMsg, setAuthSuccessMsg] = useState<string | null>(null);
+
+  // Estados de navegación y datos del dashboard
   const [activeTab, setActiveTab] = useState<"dashboard" | "matches" | "trainings" | "calendar">("dashboard");
   const [events, setEvents] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Campos del formulario
+  // Campos del modal de registro de actividad
   const [eventType, setEventType] = useState<"match" | "training">("match");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
@@ -66,7 +85,32 @@ export default function FootballDashboard() {
   const [goals, setGoals] = useState("0");
   const [extraInfo, setExtraInfo] = useState("");
 
-  // Cargar datos desde Supabase
+  // 1. Escuchar estado de autenticación de Supabase
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+      } catch (err) {
+        console.error("Error al obtener sesión:", err);
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setAuthChecking(false);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // 2. Cargar actividades desde Supabase
   const fetchActivities = async () => {
     try {
       setLoading(true);
@@ -88,10 +132,58 @@ export default function FootballDashboard() {
   };
 
   useEffect(() => {
-    fetchActivities();
-  }, []);
+    if (user) {
+      fetchActivities();
+    }
+  }, [user]);
 
-  // Guardar nueva actividad en Supabase
+  // Manejar Login / Registro
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+    setAuthSuccessMsg(null);
+
+    try {
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+        });
+
+        if (error) {
+          setAuthError(error.message);
+        } else if (data.session) {
+          setUser(data.session.user);
+        } else {
+          setAuthSuccessMsg("¡Registro exitoso! Revisa tu email para confirmar o inicia sesión.");
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        });
+
+        if (error) {
+          setAuthError(error.message);
+        } else if (data.user) {
+          setUser(data.user);
+        }
+      }
+    } catch (err) {
+      setAuthError("Ocurrió un error inesperado al procesar la autenticación.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Manejar Cerrar Sesión
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  // Guardar nueva actividad
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !date) return;
@@ -141,6 +233,118 @@ export default function FootballDashboard() {
     }
   };
 
+  // Pantalla de carga inicial mientras verifica la sesión
+  if (authChecking) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", color: "var(--text-muted)" }}>
+        <Loader2 className="spin" size={24} color="var(--accent-emerald)" />
+        <span>Iniciando sesión segura...</span>
+      </div>
+    );
+  }
+
+  // Si no hay usuario autenticado: Mostrar pantalla de Login / Registro
+  if (!user) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <div className="auth-brand-icon">⚽</div>
+            <h1 className="auth-title">SHIMA Football Analytics</h1>
+            <p className="auth-subtitle">
+              {isSignUp ? "Crea tu cuenta de entrenador o jugador" : "Ingresa para gestionar partidos y entrenamientos"}
+            </p>
+          </div>
+
+          {authError && <div className="auth-alert-error">{authError}</div>}
+          {authSuccessMsg && <div className="auth-alert-success">{authSuccessMsg}</div>}
+
+          <form onSubmit={handleAuthSubmit} className="auth-form" style={{ marginTop: "1rem" }}>
+            <div className="form-group">
+              <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Mail size={14} /> Correo Electrónico
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="ejemplo@futbol.com"
+                className="form-input"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Lock size={14} /> Contraseña
+              </label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                placeholder="Mínimo 6 caracteres"
+                className="form-input"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={authLoading}
+              style={{ width: "100%", justifyContent: "center", marginTop: "0.5rem", padding: "0.75rem" }}
+            >
+              {authLoading ? (
+                <>
+                  <Loader2 size={18} className="spin" /> Procesando...
+                </>
+              ) : (
+                <>
+                  {isSignUp ? "Crear Cuenta" : "Iniciar Sesión"} <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="auth-footer">
+            {isSignUp ? (
+              <span>
+                ¿Ya tienes una cuenta?
+                <button
+                  type="button"
+                  className="auth-toggle-btn"
+                  onClick={() => {
+                    setIsSignUp(false);
+                    setAuthError(null);
+                    setAuthSuccessMsg(null);
+                  }}
+                >
+                  Inicia sesión aquí
+                </button>
+              </span>
+            ) : (
+              <span>
+                ¿Aún no tienes cuenta?
+                <button
+                  type="button"
+                  className="auth-toggle-btn"
+                  onClick={() => {
+                    setIsSignUp(true);
+                    setAuthError(null);
+                    setAuthSuccessMsg(null);
+                  }}
+                >
+                  Regístrate gratis
+                </button>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Métricas calculadas en vivo
   const totalGoles = events.reduce((acc, curr) => acc + (curr.goals || 0), 0);
   const partidosCount = events.filter((e) => e.type === "match").length;
@@ -182,14 +386,26 @@ export default function FootballDashboard() {
           </li>
         </ul>
 
+        {/* Perfil del Usuario Autenticado + Botón Cerrar Sesión */}
         <div className="user-profile-badge">
-          <div className="user-info">
-            <div className="user-avatar">DT</div>
-            <div>
-              <p style={{ fontSize: "0.85rem", fontWeight: 600 }}>Entrenador Principal</p>
-              <p style={{ fontSize: "0.75rem", color: "var(--accent-emerald)" }}>● Supabase Online</p>
+          <div className="user-info" style={{ overflow: "hidden" }}>
+            <div className="user-avatar">
+              {user.email ? user.email.slice(0, 2).toUpperCase() : "DT"}
+            </div>
+            <div style={{ overflow: "hidden" }}>
+              <p style={{ fontSize: "0.82rem", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                {user.email}
+              </p>
+              <p style={{ fontSize: "0.72rem", color: "var(--accent-emerald)" }}>● Conectado</p>
             </div>
           </div>
+          <button
+            onClick={handleSignOut}
+            className="btn-logout"
+            title="Cerrar Sesión"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </aside>
 
@@ -205,7 +421,7 @@ export default function FootballDashboard() {
               {activeTab === "calendar" && "Calendario de Actividades"}
             </h1>
             <p className="page-subtitle">
-              Sincronizado en tiempo real con PostgreSQL • Supabase
+              Sesión activa de <strong>{user.email}</strong> • Base de datos Supabase
             </p>
           </div>
           <div className="header-actions">
@@ -226,20 +442,20 @@ export default function FootballDashboard() {
             </div>
             <div className="kpi-val">{totalGoles}</div>
             <div className="kpi-trend">
-              <TrendingUp size={14} /> En {partidosCount} partidos registrados
+              <TrendingUp size={14} /> En {partidosCount} partidos jugados
             </div>
           </div>
 
           <div className="kpi-card">
             <div className="kpi-header">
-              <span>Sesiones de Entrenamiento</span>
+              <span>Entrenamientos Realizados</span>
               <div className="kpi-icon-wrap" style={{ background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)" }}>
                 <Clock size={18} />
               </div>
             </div>
             <div className="kpi-val">{entrenamientosCount}</div>
             <div className="kpi-trend" style={{ color: "var(--accent-cyan)" }}>
-              <CheckCircle2 size={14} /> Preparación activa
+              <CheckCircle2 size={14} /> Carga física acumulada
             </div>
           </div>
 
@@ -265,7 +481,7 @@ export default function FootballDashboard() {
             </div>
             <div className="kpi-val">{events.length}</div>
             <div className="kpi-trend" style={{ color: "var(--text-muted)" }}>
-              Base de Datos Supabase
+              PostgreSQL en la nube
             </div>
           </div>
         </div>
