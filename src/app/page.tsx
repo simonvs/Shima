@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import "./dashboard.css";
 import "./auth.css";
 import { supabase } from "@/lib/supabase";
+import { parseFitFile } from "@/lib/fitParser";
 import type { User } from "@supabase/supabase-js";
 import {
   Trophy,
@@ -23,7 +24,10 @@ import {
   LogOut,
   Mail,
   Lock,
-  ArrowRight
+  ArrowRight,
+  Heart,
+  UploadCloud,
+  FileCheck2
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -39,6 +43,7 @@ import {
 
 interface ActivityItem {
   id: number;
+  user_id?: string;
   type: "match" | "training";
   title: string;
   date: string;
@@ -46,6 +51,11 @@ interface ActivityItem {
   result?: string;
   goals?: number;
   intensity?: string;
+  duration_minutes?: number;
+  calories?: number;
+  avg_heart_rate?: number;
+  max_heart_rate?: number;
+  distance_km?: number;
 }
 
 const initialPerformanceData = [
@@ -58,11 +68,11 @@ const initialPerformanceData = [
 ];
 
 export default function FootballDashboard() {
-  // Estado de sesión de usuario
+  // Estado de sesión
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
-  // Estados del formulario Auth (Login / Registro)
+  // Estados de Auth
   const [isSignUp, setIsSignUp] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -70,14 +80,14 @@ export default function FootballDashboard() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccessMsg, setAuthSuccessMsg] = useState<string | null>(null);
 
-  // Estados de navegación y datos del dashboard
+  // Estados del Dashboard
   const [activeTab, setActiveTab] = useState<"dashboard" | "matches" | "trainings" | "calendar">("dashboard");
   const [events, setEvents] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Campos del modal de registro de actividad
+  // Campos de nueva actividad (básicos + biométricos)
   const [eventType, setEventType] = useState<"match" | "training">("match");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
@@ -85,7 +95,19 @@ export default function FootballDashboard() {
   const [goals, setGoals] = useState("0");
   const [extraInfo, setExtraInfo] = useState("");
 
-  // 1. Escuchar estado de autenticación de Supabase
+  // Métricas avanzadas / .FIT
+  const [durationMinutes, setDurationMinutes] = useState("");
+  const [calories, setCalories] = useState("");
+  const [avgHeartRate, setAvgHeartRate] = useState("");
+  const [maxHeartRate, setMaxHeartRate] = useState("");
+  const [distanceKm, setDistanceKm] = useState("");
+
+  // Estado del parser .FIT
+  const [parsingFit, setParsingFit] = useState(false);
+  const [fitFileName, setFitFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 1. Escuchar sesión
   useEffect(() => {
     const checkUser = async () => {
       try {
@@ -110,13 +132,14 @@ export default function FootballDashboard() {
     };
   }, []);
 
-  // 2. Cargar actividades desde Supabase
-  const fetchActivities = async () => {
+  // 2. Cargar actividades filtrando estrictamente por el usuario conectado
+  const fetchActivities = async (currentUser: User) => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from("activities")
         .select("*")
+        .eq("user_id", currentUser.id)
         .order("date", { ascending: false });
 
       if (error) {
@@ -133,7 +156,9 @@ export default function FootballDashboard() {
 
   useEffect(() => {
     if (user) {
-      fetchActivities();
+      fetchActivities(user);
+    } else {
+      setEvents([]);
     }
   }, [user]);
 
@@ -177,20 +202,48 @@ export default function FootballDashboard() {
     }
   };
 
-  // Manejar Cerrar Sesión
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
   };
 
-  // Guardar nueva actividad
+  // Procesamiento del archivo .FIT
+  const handleFitFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setParsingFit(true);
+      setFitFileName(file.name);
+      const summary = await parseFitFile(file);
+
+      if (summary.durationMinutes) setDurationMinutes(summary.durationMinutes.toString());
+      if (summary.calories) setCalories(summary.calories.toString());
+      if (summary.avgHeartRate) setAvgHeartRate(summary.avgHeartRate.toString());
+      if (summary.maxHeartRate) setMaxHeartRate(summary.maxHeartRate.toString());
+      if (summary.distanceKm) setDistanceKm(summary.distanceKm.toString());
+
+      // Auto rellenar título si está vacío
+      if (!title) {
+        setTitle(`Sesión Garmin/GPS (${file.name.replace(".fit", "")})`);
+      }
+    } catch (err: any) {
+      alert("Error leyendo archivo .FIT: " + err.message);
+      setFitFileName(null);
+    } finally {
+      setParsingFit(false);
+    }
+  };
+
+  // Guardar actividad asociándola al user_id
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !date) return;
+    if (!title || !date || !user) return;
 
     try {
       setSaving(true);
       const newEntry = {
+        user_id: user.id,
         type: eventType,
         title,
         date,
@@ -198,6 +251,11 @@ export default function FootballDashboard() {
         result: eventType === "match" ? (extraInfo || "Programado") : null,
         goals: eventType === "match" ? parseInt(goals, 10) || 0 : 0,
         intensity: eventType === "training" ? (extraInfo || "Media") : null,
+        duration_minutes: durationMinutes ? parseInt(durationMinutes, 10) : null,
+        calories: calories ? parseInt(calories, 10) : null,
+        avg_heart_rate: avgHeartRate ? parseInt(avgHeartRate, 10) : null,
+        max_heart_rate: maxHeartRate ? parseInt(maxHeartRate, 10) : null,
+        distance_km: distanceKm ? parseFloat(distanceKm) : null,
       };
 
       const { data, error } = await supabase
@@ -209,10 +267,17 @@ export default function FootballDashboard() {
         alert("Error al guardar en Supabase: " + error.message);
       } else if (data && data.length > 0) {
         setEvents([data[0], ...events]);
+        // Reset campos
         setTitle("");
         setDate("");
         setExtraInfo("");
         setGoals("0");
+        setDurationMinutes("");
+        setCalories("");
+        setAvgHeartRate("");
+        setMaxHeartRate("");
+        setDistanceKm("");
+        setFitFileName(null);
         setIsModalOpen(false);
       }
     } catch (err) {
@@ -233,7 +298,7 @@ export default function FootballDashboard() {
     }
   };
 
-  // Pantalla de carga inicial mientras verifica la sesión
+  // Pantalla de carga inicial
   if (authChecking) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", color: "var(--text-muted)" }}>
@@ -243,7 +308,7 @@ export default function FootballDashboard() {
     );
   }
 
-  // Si no hay usuario autenticado: Mostrar pantalla de Login / Registro
+  // Vista Login / Registro
   if (!user) {
     return (
       <div className="auth-container">
@@ -252,7 +317,7 @@ export default function FootballDashboard() {
             <div className="auth-brand-icon">⚽</div>
             <h1 className="auth-title">SHIMA Football Analytics</h1>
             <p className="auth-subtitle">
-              {isSignUp ? "Crea tu cuenta de entrenador o jugador" : "Ingresa para gestionar partidos y entrenamientos"}
+              {isSignUp ? "Crea tu cuenta de entrenador o jugador" : "Ingresa para gestionar tus partidos y entrenamientos"}
             </p>
           </div>
 
@@ -345,14 +410,18 @@ export default function FootballDashboard() {
     );
   }
 
-  // Métricas calculadas en vivo
+  // Métricas calculadas en vivo del usuario actual
   const totalGoles = events.reduce((acc, curr) => acc + (curr.goals || 0), 0);
+  const totalCalorias = events.reduce((acc, curr) => acc + (curr.calories || 0), 0);
+  const totalDistancia = events.reduce((acc, curr) => acc + (curr.distance_km || 0), 0);
+  const hrEvents = events.filter((e) => e.avg_heart_rate);
+  const avgHR = hrEvents.length > 0 ? Math.round(hrEvents.reduce((acc, c) => acc + (c.avg_heart_rate || 0), 0) / hrEvents.length) : null;
   const partidosCount = events.filter((e) => e.type === "match").length;
   const entrenamientosCount = events.filter((e) => e.type === "training").length;
 
   return (
     <div className="dashboard-container">
-      {/* Barra Lateral / Sidebar */}
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon">⚽</div>
@@ -370,13 +439,13 @@ export default function FootballDashboard() {
             className={`nav-item ${activeTab === "matches" ? "active" : ""}`}
             onClick={() => setActiveTab("matches")}
           >
-            <Trophy size={18} /> Partidos ({partidosCount})
+            <Trophy size={18} /> Mis Partidos ({partidosCount})
           </li>
           <li
             className={`nav-item ${activeTab === "trainings" ? "active" : ""}`}
             onClick={() => setActiveTab("trainings")}
           >
-            <Dumbbell size={18} /> Entrenamientos ({entrenamientosCount})
+            <Dumbbell size={18} /> Mis Entrenamientos ({entrenamientosCount})
           </li>
           <li
             className={`nav-item ${activeTab === "calendar" ? "active" : ""}`}
@@ -386,7 +455,7 @@ export default function FootballDashboard() {
           </li>
         </ul>
 
-        {/* Perfil del Usuario Autenticado + Botón Cerrar Sesión */}
+        {/* Perfil del usuario */}
         <div className="user-profile-badge">
           <div className="user-info" style={{ overflow: "hidden" }}>
             <div className="user-avatar">
@@ -396,7 +465,7 @@ export default function FootballDashboard() {
               <p style={{ fontSize: "0.82rem", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                 {user.email}
               </p>
-              <p style={{ fontSize: "0.72rem", color: "var(--accent-emerald)" }}>● Conectado</p>
+              <p style={{ fontSize: "0.72rem", color: "var(--accent-emerald)" }}>● Cuenta Personal</p>
             </div>
           </div>
           <button
@@ -411,31 +480,30 @@ export default function FootballDashboard() {
 
       {/* Contenido Principal */}
       <main className="main-content">
-        {/* Cabecera Superior */}
         <header className="top-header">
           <div>
             <h1 className="page-title">
-              {activeTab === "dashboard" && "Rendimiento y Estadísticas"}
-              {activeTab === "matches" && "Historial de Partidos"}
-              {activeTab === "trainings" && "Carga y Entrenamientos"}
-              {activeTab === "calendar" && "Calendario de Actividades"}
+              {activeTab === "dashboard" && "Mi Rendimiento Deportivo"}
+              {activeTab === "matches" && "Mis Partidos Registrados"}
+              {activeTab === "trainings" && "Mis Sesiones de Entrenamiento"}
+              {activeTab === "calendar" && "Calendario Personal"}
             </h1>
             <p className="page-subtitle">
-              Sesión activa de <strong>{user.email}</strong> • Base de datos Supabase
+              Datos biométricos y técnicos de <strong>{user.email}</strong>
             </p>
           </div>
           <div className="header-actions">
             <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-              <Plus size={18} /> Nuevo Registro
+              <Plus size={18} /> Nueva Sesión / Subir .FIT
             </button>
           </div>
         </header>
 
-        {/* Tarjetas KPI con datos reales */}
+        {/* Tarjetas KPI Biométricas y Técnicas */}
         <div className="kpi-grid">
           <div className="kpi-card">
             <div className="kpi-header">
-              <span>Goles Registrados</span>
+              <span>Goles Totales</span>
               <div className="kpi-icon-wrap" style={{ background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)" }}>
                 <Target size={18} />
               </div>
@@ -448,51 +516,50 @@ export default function FootballDashboard() {
 
           <div className="kpi-card">
             <div className="kpi-header">
-              <span>Entrenamientos Realizados</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)" }}>
-                <Clock size={18} />
-              </div>
-            </div>
-            <div className="kpi-val">{entrenamientosCount}</div>
-            <div className="kpi-trend" style={{ color: "var(--accent-cyan)" }}>
-              <CheckCircle2 size={14} /> Carga física acumulada
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-header">
-              <span>Distancia Promedio</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.15)", color: "var(--accent-amber)" }}>
+              <span>Calorías Quemadas</span>
+              <div className="kpi-icon-wrap" style={{ background: "rgba(244, 63, 94, 0.15)", color: "var(--accent-rose)" }}>
                 <Flame size={18} />
               </div>
             </div>
-            <div className="kpi-val">10.02 km</div>
-            <div className="kpi-trend" style={{ color: "var(--accent-amber)" }}>
-              <TrendingUp size={14} /> GPS / Track
+            <div className="kpi-val">{totalCalorias > 0 ? `${totalCalorias.toLocaleString()} kcal` : "--"}</div>
+            <div className="kpi-trend" style={{ color: "var(--accent-rose)" }}>
+              {totalCalorias > 0 ? "Extraído de sesiones GPS / .FIT" : "Sin datos de calorías aún"}
             </div>
           </div>
 
           <div className="kpi-card">
             <div className="kpi-header">
-              <span>Total Actividades</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(244, 63, 94, 0.15)", color: "var(--accent-rose)" }}>
-                <Trophy size={18} />
+              <span>Frecuencia Cardíaca Media</span>
+              <div className="kpi-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.15)", color: "var(--accent-amber)" }}>
+                <Heart size={18} />
               </div>
             </div>
-            <div className="kpi-val">{events.length}</div>
-            <div className="kpi-trend" style={{ color: "var(--text-muted)" }}>
-              PostgreSQL en la nube
+            <div className="kpi-val">{avgHR ? `${avgHR} ppm` : "--"}</div>
+            <div className="kpi-trend" style={{ color: "var(--accent-amber)" }}>
+              {avgHR ? "Zona aeróbica / anaeróbica" : "Sensor FC no registrado"}
+            </div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <span>Distancia Total (GPS)</span>
+              <div className="kpi-icon-wrap" style={{ background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)" }}>
+                <Activity size={18} />
+              </div>
+            </div>
+            <div className="kpi-val">{totalDistancia > 0 ? `${totalDistancia.toFixed(1)} km` : `${events.length} reg.`}</div>
+            <div className="kpi-trend" style={{ color: "var(--accent-cyan)" }}>
+              {events.length} actividades personales
             </div>
           </div>
         </div>
 
-        {/* Sección de Gráficos y Lista */}
+        {/* Sección de Gráficos */}
         <div className="grid-2col">
-          {/* Gráfico de Evolución Física */}
           <section className="panel-card">
             <div className="panel-header">
               <div>
-                <h2 className="panel-title">Métricas de Distancia e Intensidad (km)</h2>
+                <h2 className="panel-title">Evolución de Intensidad y Distancia (km)</h2>
                 <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
                   Recorrido físico por fecha disputada
                 </p>
@@ -534,12 +601,11 @@ export default function FootballDashboard() {
             </div>
           </section>
 
-          {/* Gráfico de Goles y xG */}
           <section className="panel-card">
             <div className="panel-header">
               <div>
                 <h2 className="panel-title">Goles vs Goles Esperados (xG)</h2>
-                <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Eficiencia ofensiva</p>
+                <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Efectividad de ataque</p>
               </div>
             </div>
 
@@ -565,22 +631,22 @@ export default function FootballDashboard() {
           </section>
         </div>
 
-        {/* Lista en tiempo real de Supabase */}
+        {/* Lista de Registros Personales */}
         <section className="panel-card">
           <div className="panel-header">
-            <h2 className="panel-title">Registro en Vivo (Supabase)</h2>
+            <h2 className="panel-title">Mis Registros con Telemetría & Biometría</h2>
             <span style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>
-              {loading ? "Cargando..." : `${events.length} registros sincronizados`}
+              {loading ? "Cargando..." : `${events.length} actividades de tu cuenta`}
             </span>
           </div>
 
           {loading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", gap: "0.5rem", color: "var(--text-muted)" }}>
-              <Loader2 className="spin" size={20} /> Conectando con la base de datos...
+              <Loader2 className="spin" size={20} /> Obteniendo tus datos...
             </div>
           ) : events.length === 0 ? (
-            <p style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
-              No hay actividades registradas aún. ¡Agrega una con el botón "+ Nuevo Registro"!
+            <p style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-muted)" }}>
+              No tienes actividades registradas aún. Haz clic en <strong>"+ Nueva Sesión / Subir .FIT"</strong> para añadir tu primer partido o entrenamiento.
             </p>
           ) : (
             <div className="events-list">
@@ -591,41 +657,63 @@ export default function FootballDashboard() {
                   return true;
                 })
                 .map((ev) => (
-                  <div key={ev.id} className="event-item">
-                    <div className="event-left">
+                  <div key={ev.id} className="event-item" style={{ alignItems: "flex-start", padding: "1rem" }}>
+                    <div className="event-left" style={{ flex: 1 }}>
                       <span className={`event-badge ${ev.type === "match" ? "badge-match" : "badge-training"}`}>
                         {ev.type === "match" ? "Partido" : "Entrenamiento"}
                       </span>
-                      <div>
-                        <h3 className="event-title">{ev.title}</h3>
+                      <div style={{ width: "100%" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <h3 className="event-title">{ev.title}</h3>
+                          {ev.type === "match" && (
+                            <span className="event-score">{ev.result || "S/D"}</span>
+                          )}
+                        </div>
                         <p className="event-sub">{ev.date} • {ev.time || "18:00"}</p>
+
+                        {/* Badges de métricas biométricas / .FIT */}
+                        <div className="biometric-badges">
+                          {ev.duration_minutes && (
+                            <span className="bio-badge">
+                              <Clock size={12} color="var(--accent-cyan)" /> {ev.duration_minutes} min
+                            </span>
+                          )}
+                          {ev.avg_heart_rate && (
+                            <span className="bio-badge">
+                              <Heart size={12} color="var(--accent-rose)" /> {ev.avg_heart_rate} ppm med. {ev.max_heart_rate ? `(máx ${ev.max_heart_rate})` : ""}
+                            </span>
+                          )}
+                          {ev.calories && (
+                            <span className="bio-badge">
+                              <Flame size={12} color="var(--accent-amber)" /> {ev.calories} kcal
+                            </span>
+                          )}
+                          {ev.distance_km && (
+                            <span className="bio-badge">
+                              <Activity size={12} color="var(--accent-emerald)" /> {ev.distance_km} km
+                            </span>
+                          )}
+                          {ev.goals !== undefined && ev.goals > 0 && (
+                            <span className="bio-badge" style={{ color: "var(--accent-emerald)" }}>
+                              ⚽ {ev.goals} {ev.goals === 1 ? "gol" : "goles"}
+                            </span>
+                          )}
+                          {ev.intensity && (
+                            <span className="bio-badge">
+                              Intensidad: {ev.intensity}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                      {ev.type === "match" ? (
-                        <div style={{ textAlign: "right" }}>
-                          <span className="event-score">{ev.result || "S/D"}</span>
-                          {ev.goals !== undefined && ev.goals > 0 && (
-                            <p style={{ fontSize: "0.75rem", color: "var(--accent-emerald)", marginTop: "2px" }}>
-                              ⚽ {ev.goals} {ev.goals === 1 ? "gol" : "goles"}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: "0.85rem", color: "var(--accent-amber)", fontWeight: 500 }}>
-                          Intensidad: {ev.intensity || "Media"}
-                        </span>
-                      )}
-
-                      <button
-                        onClick={() => handleDeleteEvent(ev.id)}
-                        title="Eliminar de Supabase"
-                        style={{ color: "var(--text-dim)", padding: "4px" }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleDeleteEvent(ev.id)}
+                      title="Eliminar de mi cuenta"
+                      style={{ color: "var(--text-dim)", padding: "4px", marginLeft: "1rem" }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 ))}
             </div>
@@ -633,15 +721,58 @@ export default function FootballDashboard() {
         </section>
       </main>
 
-      {/* Modal para Agregar Partido o Entrenamiento */}
+      {/* Modal para Agregar Actividad con Carga .FIT y Entrada Manual */}
       {isModalOpen && (
         <div className="modal-overlay" onClick={() => !saving && setIsModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: "560px", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: "1.2rem", fontWeight: 700 }}>Nuevo Registro Deportivo</h3>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 700 }}>Registrar Actividad Deportiva</h3>
               <button onClick={() => setIsModalOpen(false)} disabled={saving}>
                 <X size={20} color="var(--text-dim)" />
               </button>
+            </div>
+
+            {/* Caja para subir archivo .FIT */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".fit"
+              style={{ display: "none" }}
+              onChange={handleFitFileUpload}
+            />
+
+            <div
+              className={`fit-dropzone ${fitFileName ? "fit-dropzone-active" : ""}`}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {parsingFit ? (
+                <>
+                  <Loader2 className="spin" size={24} color="var(--accent-emerald)" />
+                  <p style={{ fontSize: "0.85rem", color: "var(--accent-emerald)", fontWeight: 600 }}>
+                    Extrayendo métricas del archivo .FIT...
+                  </p>
+                </>
+              ) : fitFileName ? (
+                <>
+                  <FileCheck2 size={24} color="var(--accent-emerald)" />
+                  <p style={{ fontSize: "0.85rem", color: "var(--accent-emerald)", fontWeight: 600 }}>
+                    {fitFileName} cargado con éxito
+                  </p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                    Campos de FC, duración y calorías autocompletados
+                  </p>
+                </>
+              ) : (
+                <>
+                  <UploadCloud size={24} color="var(--accent-emerald)" />
+                  <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
+                    Adjuntar archivo .FIT (Garmin, Polar, Suunto)
+                  </p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                    O completa los datos manualmente abajo
+                  </p>
+                </>
+              )}
             </div>
 
             <form onSubmit={handleAddEvent}>
@@ -659,12 +790,12 @@ export default function FootballDashboard() {
 
               <div className="form-group">
                 <label className="form-label">
-                  {eventType === "match" ? "Rival / Partido" : "Nombre de la Sesión"}
+                  {eventType === "match" ? "Rival / Nombre del Partido" : "Nombre de la Sesión"}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder={eventType === "match" ? "Ej: vs. Deportivo Sur" : "Ej: Trabajo de velocidad y posesión"}
+                  placeholder={eventType === "match" ? "Ej: vs. Atlético FC" : "Ej: Trabajo de posesión y resistencia"}
                   className="form-input"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -696,10 +827,10 @@ export default function FootballDashboard() {
               {eventType === "match" ? (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <div className="form-group">
-                    <label className="form-label">Resultado (Ej: 3 - 1)</label>
+                    <label className="form-label">Resultado (Ej: 2 - 1)</label>
                     <input
                       type="text"
-                      placeholder="3 - 1 (V)"
+                      placeholder="2 - 1 (Victoria)"
                       className="form-input"
                       value={extraInfo}
                       onChange={(e) => setExtraInfo(e.target.value)}
@@ -731,6 +862,71 @@ export default function FootballDashboard() {
                 </div>
               )}
 
+              {/* Sección Biometría y Rendimiento Físico */}
+              <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border-color)" }}>
+                <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-cyan)", marginBottom: "0.75rem" }}>
+                  Datos Físicos y Biometría (Manuales o de .FIT)
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div className="form-group">
+                    <label className="form-label">Duración (minutos)</label>
+                    <input
+                      type="number"
+                      placeholder="Ej: 90"
+                      className="form-input"
+                      value={durationMinutes}
+                      onChange={(e) => setDurationMinutes(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Calorías (kcal)</label>
+                    <input
+                      type="number"
+                      placeholder="Ej: 750"
+                      className="form-input"
+                      value={calories}
+                      onChange={(e) => setCalories(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div className="form-group">
+                    <label className="form-label">FC Media (ppm)</label>
+                    <input
+                      type="number"
+                      placeholder="Ej: 154"
+                      className="form-input"
+                      value={avgHeartRate}
+                      onChange={(e) => setAvgHeartRate(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">FC Máxima (ppm)</label>
+                    <input
+                      type="number"
+                      placeholder="Ej: 188"
+                      className="form-input"
+                      value={maxHeartRate}
+                      onChange={(e) => setMaxHeartRate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Distancia Recorrida (km)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Ej: 9.85"
+                    className="form-input"
+                    value={distanceKm}
+                    onChange={(e) => setDistanceKm(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
                 <button
                   type="button"
@@ -743,10 +939,10 @@ export default function FootballDashboard() {
                 <button type="submit" className="btn-primary" disabled={saving}>
                   {saving ? (
                     <>
-                      <Loader2 size={16} className="spin" /> Guardando en Supabase...
+                      <Loader2 size={16} className="spin" /> Guardando en tu cuenta...
                     </>
                   ) : (
-                    "Guardar en Base de Datos"
+                    "Guardar Actividad"
                   )}
                 </button>
               </div>
