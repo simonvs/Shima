@@ -5,6 +5,7 @@ import "./dashboard.css";
 import "./auth.css";
 import { supabase } from "@/lib/supabase";
 import { parseFitFile } from "@/lib/fitParser";
+import SportsCalendar from "@/components/SportsCalendar";
 import type { User } from "@supabase/supabase-js";
 import {
   Trophy,
@@ -499,226 +500,239 @@ export default function FootballDashboard() {
           </div>
         </header>
 
-        {/* Tarjetas KPI Biométricas y Técnicas */}
-        <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-header">
-              <span>Goles Totales</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)" }}>
-                <Target size={18} />
-              </div>
-            </div>
-            <div className="kpi-val">{totalGoles}</div>
-            <div className="kpi-trend">
-              <TrendingUp size={14} /> En {partidosCount} partidos jugados
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-header">
-              <span>Calorías Quemadas</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(244, 63, 94, 0.15)", color: "var(--accent-rose)" }}>
-                <Flame size={18} />
-              </div>
-            </div>
-            <div className="kpi-val">{totalCalorias > 0 ? `${totalCalorias.toLocaleString()} kcal` : "--"}</div>
-            <div className="kpi-trend" style={{ color: "var(--accent-rose)" }}>
-              {totalCalorias > 0 ? "Extraído de sesiones GPS / .FIT" : "Sin datos de calorías aún"}
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-header">
-              <span>Frecuencia Cardíaca Media</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.15)", color: "var(--accent-amber)" }}>
-                <Heart size={18} />
-              </div>
-            </div>
-            <div className="kpi-val">{avgHR ? `${avgHR} ppm` : "--"}</div>
-            <div className="kpi-trend" style={{ color: "var(--accent-amber)" }}>
-              {avgHR ? "Zona aeróbica / anaeróbica" : "Sensor FC no registrado"}
-            </div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-header">
-              <span>Distancia Total (GPS)</span>
-              <div className="kpi-icon-wrap" style={{ background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)" }}>
-                <Activity size={18} />
-              </div>
-            </div>
-            <div className="kpi-val">{totalDistancia > 0 ? `${totalDistancia.toFixed(1)} km` : `${events.length} reg.`}</div>
-            <div className="kpi-trend" style={{ color: "var(--accent-cyan)" }}>
-              {events.length} actividades personales
-            </div>
-          </div>
-        </div>
-
-        {/* Sección de Gráficos */}
-        <div className="grid-2col">
-          <section className="panel-card">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Evolución de Intensidad y Distancia (km)</h2>
-                <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
-                  Recorrido físico por fecha disputada
-                </p>
-              </div>
-              <BarChart3 size={18} color="var(--accent-cyan)" />
-            </div>
-
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={initialPerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorKm" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="match" stroke="#64748b" fontSize={12} tickLine={false} />
-                  <YAxis stroke="#64748b" fontSize={12} domain={[6, 14]} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "rgba(17, 26, 46, 0.95)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      borderRadius: "8px",
-                      color: "#fff"
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="kmRecorridos"
-                    stroke="#10b981"
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#colorKm)"
-                    name="Km Recorridos"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <div className="panel-header">
-              <div>
-                <h2 className="panel-title">Goles vs Goles Esperados (xG)</h2>
-                <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Efectividad de ataque</p>
-              </div>
-            </div>
-
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={initialPerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="match" stroke="#64748b" fontSize={12} tickLine={false} />
-                  <YAxis stroke="#64748b" fontSize={12} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "rgba(17, 26, 46, 0.95)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      borderRadius: "8px",
-                      color: "#fff"
-                    }}
-                  />
-                  <Bar dataKey="goles" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Goles" />
-                  <Bar dataKey="xG" fill="#f59e0b" radius={[4, 4, 0, 0]} name="xG Esperado" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-        </div>
-
-        {/* Lista de Registros Personales */}
-        <section className="panel-card">
-          <div className="panel-header">
-            <h2 className="panel-title">Mis Registros con Telemetría & Biometría</h2>
-            <span style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>
-              {loading ? "Cargando..." : `${events.length} actividades de tu cuenta`}
-            </span>
-          </div>
-
-          {loading ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", gap: "0.5rem", color: "var(--text-muted)" }}>
-              <Loader2 className="spin" size={20} /> Obteniendo tus datos...
-            </div>
-          ) : events.length === 0 ? (
-            <p style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-muted)" }}>
-              No tienes actividades registradas aún. Haz clic en <strong>"+ Nueva Sesión / Subir .FIT"</strong> para añadir tu primer partido o entrenamiento.
-            </p>
-          ) : (
-            <div className="events-list">
-              {events
-                .filter((ev) => {
-                  if (activeTab === "matches") return ev.type === "match";
-                  if (activeTab === "trainings") return ev.type === "training";
-                  return true;
-                })
-                .map((ev) => (
-                  <div key={ev.id} className="event-item" style={{ alignItems: "flex-start", padding: "1rem" }}>
-                    <div className="event-left" style={{ flex: 1 }}>
-                      <span className={`event-badge ${ev.type === "match" ? "badge-match" : "badge-training"}`}>
-                        {ev.type === "match" ? "Partido" : "Entrenamiento"}
-                      </span>
-                      <div style={{ width: "100%" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <h3 className="event-title">{ev.title}</h3>
-                          {ev.type === "match" && (
-                            <span className="event-score">{ev.result || "S/D"}</span>
-                          )}
-                        </div>
-                        <p className="event-sub">{ev.date} • {ev.time || "18:00"}</p>
-
-                        {/* Badges de métricas biométricas / .FIT */}
-                        <div className="biometric-badges">
-                          {ev.duration_minutes && (
-                            <span className="bio-badge">
-                              <Clock size={12} color="var(--accent-cyan)" /> {ev.duration_minutes} min
-                            </span>
-                          )}
-                          {ev.avg_heart_rate && (
-                            <span className="bio-badge">
-                              <Heart size={12} color="var(--accent-rose)" /> {ev.avg_heart_rate} ppm med. {ev.max_heart_rate ? `(máx ${ev.max_heart_rate})` : ""}
-                            </span>
-                          )}
-                          {ev.calories && (
-                            <span className="bio-badge">
-                              <Flame size={12} color="var(--accent-amber)" /> {ev.calories} kcal
-                            </span>
-                          )}
-                          {ev.distance_km && (
-                            <span className="bio-badge">
-                              <Activity size={12} color="var(--accent-emerald)" /> {ev.distance_km} km
-                            </span>
-                          )}
-                          {ev.goals !== undefined && ev.goals > 0 && (
-                            <span className="bio-badge" style={{ color: "var(--accent-emerald)" }}>
-                              ⚽ {ev.goals} {ev.goals === 1 ? "gol" : "goles"}
-                            </span>
-                          )}
-                          {ev.intensity && (
-                            <span className="bio-badge">
-                              Intensidad: {ev.intensity}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleDeleteEvent(ev.id)}
-                      title="Eliminar de mi cuenta"
-                      style={{ color: "var(--text-dim)", padding: "4px", marginLeft: "1rem" }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+        {/* Vista Calendario o Vista Dashboard Principal */}
+        {activeTab === "calendar" ? (
+          <SportsCalendar
+            events={events}
+            onNewEventOnDate={(selectedDate) => {
+              setDate(selectedDate);
+              setIsModalOpen(true);
+            }}
+          />
+        ) : (
+          <>
+            {/* Tarjetas KPI Biométricas y Técnicas */}
+            <div className="kpi-grid">
+              <div className="kpi-card">
+                <div className="kpi-header">
+                  <span>Goles Totales</span>
+                  <div className="kpi-icon-wrap" style={{ background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)" }}>
+                    <Target size={18} />
                   </div>
-                ))}
+                </div>
+                <div className="kpi-val">{totalGoles}</div>
+                <div className="kpi-trend">
+                  <TrendingUp size={14} /> En {partidosCount} partidos jugados
+                </div>
+              </div>
+
+              <div className="kpi-card">
+                <div className="kpi-header">
+                  <span>Calorías Quemadas</span>
+                  <div className="kpi-icon-wrap" style={{ background: "rgba(244, 63, 94, 0.15)", color: "var(--accent-rose)" }}>
+                    <Flame size={18} />
+                  </div>
+                </div>
+                <div className="kpi-val">{totalCalorias > 0 ? `${totalCalorias.toLocaleString()} kcal` : "--"}</div>
+                <div className="kpi-trend" style={{ color: "var(--accent-rose)" }}>
+                  {totalCalorias > 0 ? "Extraído de sesiones GPS / .FIT" : "Sin datos de calorías aún"}
+                </div>
+              </div>
+
+              <div className="kpi-card">
+                <div className="kpi-header">
+                  <span>Frecuencia Cardíaca Media</span>
+                  <div className="kpi-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.15)", color: "var(--accent-amber)" }}>
+                    <Heart size={18} />
+                  </div>
+                </div>
+                <div className="kpi-val">{avgHR ? `${avgHR} ppm` : "--"}</div>
+                <div className="kpi-trend" style={{ color: "var(--accent-amber)" }}>
+                  {avgHR ? "Zona aeróbica / anaeróbica" : "Sensor FC no registrado"}
+                </div>
+              </div>
+
+              <div className="kpi-card">
+                <div className="kpi-header">
+                  <span>Distancia Total (GPS)</span>
+                  <div className="kpi-icon-wrap" style={{ background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)" }}>
+                    <Activity size={18} />
+                  </div>
+                </div>
+                <div className="kpi-val">{totalDistancia > 0 ? `${totalDistancia.toFixed(1)} km` : `${events.length} reg.`}</div>
+                <div className="kpi-trend" style={{ color: "var(--accent-cyan)" }}>
+                  {events.length} actividades personales
+                </div>
+              </div>
             </div>
-          )}
-        </section>
+
+            {/* Sección de Gráficos */}
+            <div className="grid-2col">
+              <section className="panel-card">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Evolución de Intensidad y Distancia (km)</h2>
+                    <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
+                      Recorrido físico por fecha disputada
+                    </p>
+                  </div>
+                  <BarChart3 size={18} color="var(--accent-cyan)" />
+                </div>
+
+                <div style={{ width: "100%", height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={initialPerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorKm" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="match" stroke="#64748b" fontSize={12} tickLine={false} />
+                      <YAxis stroke="#64748b" fontSize={12} domain={[6, 14]} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(17, 26, 46, 0.95)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: "8px",
+                          color: "#fff"
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="kmRecorridos"
+                        stroke="#10b981"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#colorKm)"
+                        name="Km Recorridos"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+
+              <section className="panel-card">
+                <div className="panel-header">
+                  <div>
+                    <h2 className="panel-title">Goles vs Goles Esperados (xG)</h2>
+                    <p style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Efectividad de ataque</p>
+                  </div>
+                </div>
+
+                <div style={{ width: "100%", height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={initialPerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="match" stroke="#64748b" fontSize={12} tickLine={false} />
+                      <YAxis stroke="#64748b" fontSize={12} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(17, 26, 46, 0.95)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: "8px",
+                          color: "#fff"
+                        }}
+                      />
+                      <Bar dataKey="goles" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Goles" />
+                      <Bar dataKey="xG" fill="#f59e0b" radius={[4, 4, 0, 0]} name="xG Esperado" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+            </div>
+
+            {/* Lista de Registros Personales */}
+            <section className="panel-card">
+              <div className="panel-header">
+                <h2 className="panel-title">Mis Registros con Telemetría & Biometría</h2>
+                <span style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>
+                  {loading ? "Cargando..." : `${events.length} actividades de tu cuenta`}
+                </span>
+              </div>
+
+              {loading ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", gap: "0.5rem", color: "var(--text-muted)" }}>
+                  <Loader2 className="spin" size={20} /> Obteniendo tus datos...
+                </div>
+              ) : events.length === 0 ? (
+                <p style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-muted)" }}>
+                  No tienes actividades registradas aún. Haz clic en <strong>"+ Nueva Sesión / Subir .FIT"</strong> para añadir tu primer partido o entrenamiento.
+                </p>
+              ) : (
+                <div className="events-list">
+                  {events
+                    .filter((ev) => {
+                      if (activeTab === "matches") return ev.type === "match";
+                      if (activeTab === "trainings") return ev.type === "training";
+                      return true;
+                    })
+                    .map((ev) => (
+                      <div key={ev.id} className="event-item" style={{ alignItems: "flex-start", padding: "1rem" }}>
+                        <div className="event-left" style={{ flex: 1 }}>
+                          <span className={`event-badge ${ev.type === "match" ? "badge-match" : "badge-training"}`}>
+                            {ev.type === "match" ? "Partido" : "Entrenamiento"}
+                          </span>
+                          <div style={{ width: "100%" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <h3 className="event-title">{ev.title}</h3>
+                              {ev.type === "match" && (
+                                <span className="event-score">{ev.result || "S/D"}</span>
+                              )}
+                            </div>
+                            <p className="event-sub">{ev.date} • {ev.time || "18:00"}</p>
+
+                            {/* Badges de métricas biométricas / .FIT */}
+                            <div className="biometric-badges">
+                              {ev.duration_minutes && (
+                                <span className="bio-badge">
+                                  <Clock size={12} color="var(--accent-cyan)" /> {ev.duration_minutes} min
+                                </span>
+                              )}
+                              {ev.avg_heart_rate && (
+                                <span className="bio-badge">
+                                  <Heart size={12} color="var(--accent-rose)" /> {ev.avg_heart_rate} ppm med. {ev.max_heart_rate ? `(máx ${ev.max_heart_rate})` : ""}
+                                </span>
+                              )}
+                              {ev.calories && (
+                                <span className="bio-badge">
+                                  <Flame size={12} color="var(--accent-amber)" /> {ev.calories} kcal
+                                </span>
+                              )}
+                              {ev.distance_km && (
+                                <span className="bio-badge">
+                                  <Activity size={12} color="var(--accent-emerald)" /> {ev.distance_km} km
+                                </span>
+                              )}
+                              {ev.goals !== undefined && ev.goals > 0 && (
+                                <span className="bio-badge" style={{ color: "var(--accent-emerald)" }}>
+                                  ⚽ {ev.goals} {ev.goals === 1 ? "gol" : "goles"}
+                                </span>
+                              )}
+                              {ev.intensity && (
+                                <span className="bio-badge">
+                                  Intensidad: {ev.intensity}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteEvent(ev.id)}
+                          title="Eliminar de mi cuenta"
+                          style={{ color: "var(--text-dim)", padding: "4px", marginLeft: "1rem" }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
 
       {/* Modal para Agregar Actividad con Carga .FIT y Entrada Manual */}
