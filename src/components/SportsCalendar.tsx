@@ -12,6 +12,7 @@ import {
   Activity as ActivityIcon,
   X
 } from "lucide-react";
+import { parseMatchResult } from "@/lib/matchUtils";
 
 export interface CalendarEvent {
   id: number;
@@ -268,9 +269,26 @@ export default function SportsCalendar({ events, onNewEventOnDate }: SportsCalen
                       </span>
                       <h4 style={{ fontSize: "1rem", fontWeight: 600 }}>{ev.title}</h4>
                     </div>
-                    {ev.type === "match" && ev.result && (
-                      <span className="event-score">{ev.result}</span>
-                    )}
+                    {ev.type === "match" && ev.result && (() => {
+                      const parsed = parseMatchResult(ev.result);
+                      if (!parsed) return <span className="event-score">{ev.result}</span>;
+                      return (
+                        <span className={`event-score ${parsed.className}`} title={parsed.label}>
+                          {parsed.scoreText}
+                          <small
+                            style={{
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.03em",
+                              opacity: 0.9,
+                            }}
+                          >
+                            {parsed.label}
+                          </small>
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.8rem", color: "var(--text-dim)" }}>

@@ -505,10 +505,39 @@
 
 .event-score {
   font-weight: 700;
-  font-size: 1.1rem;
-  padding: 0.2rem 0.6rem;
+  font-size: 1.05rem;
+  padding: 0.25rem 0.65rem;
   background: rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.event-score-victory {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: var(--accent-emerald) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.event-score-draw {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: var(--accent-amber) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+.event-score-defeat {
+  background: rgba(244, 63, 94, 0.15) !important;
+  color: var(--accent-rose) !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+.event-score-pending {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--text-dim) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Modal Simple */

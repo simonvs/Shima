@@ -12,7 +12,7 @@ declare module "fit-file-parser" {
     constructor(options?: FitParserOptions);
     parse(
       buffer: ArrayBuffer,
-      callback: (error: any, data: any) => void
+      callback: (error: Error | string | null, data: Record<string, unknown>) => void
     ): void;
   }
 }
