@@ -1,4 +1,4 @@
-import { Loader2, Trash2, Clock, Heart, Flame, Activity } from "lucide-react";
+import { Loader2, Trash2, Clock, Heart, Flame, Activity, Pencil } from "lucide-react";
 import type { ActivityItem, TabType } from "@/types/activity";
 import { parseMatchResult } from "@/lib/matchUtils";
 
@@ -8,6 +8,7 @@ interface ActivityListProps {
   loading: boolean;
   onDeleteEvent: (id: number) => void;
   onOpenModal: () => void;
+  onEditActivity?: (activity: ActivityItem) => void;
   onSelectActivityForHr?: (activity: ActivityItem) => void;
 }
 
@@ -17,6 +18,7 @@ export default function ActivityList({
   loading,
   onDeleteEvent,
   onOpenModal,
+  onEditActivity,
   onSelectActivityForHr,
 }: ActivityListProps) {
   const filteredEvents = events.filter((ev) => {
@@ -155,6 +157,27 @@ export default function ActivityList({
                     }}
                   >
                     <Heart size={13} /> Zonas
+                  </button>
+                )}
+                {onEditActivity && (
+                  <button
+                    onClick={() => onEditActivity(ev)}
+                    title="Editar actividad"
+                    style={{
+                      background: "rgba(6, 182, 212, 0.12)",
+                      border: "1px solid rgba(6, 182, 212, 0.3)",
+                      color: "var(--accent-cyan)",
+                      borderRadius: "6px",
+                      padding: "4px 8px",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Pencil size={13} /> Editar
                   </button>
                 )}
                 <button

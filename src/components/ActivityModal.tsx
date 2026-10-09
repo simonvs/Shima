@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { X, UploadCloud, Loader2, FileCheck2, Zap, Settings } from "lucide-react";
 import { parseFitFile } from "@/lib/fitParser";
 import { calculateCaloriesKeytel } from "@/lib/calorieCalculator";
@@ -10,8 +10,9 @@ import type { UserBiometrics } from "@/types/user";
 interface ActivityModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (activityData: Omit<ActivityItem, "id">) => Promise<boolean>;
+  onSave: (activityData: Omit<ActivityItem, "id">, editId?: number) => Promise<boolean>;
   initialDate?: string;
+  activityToEdit?: ActivityItem | null;
   userId: string;
   biometrics?: UserBiometrics;
   onOpenProfile?: () => void;
@@ -22,6 +23,7 @@ export default function ActivityModal({
   onClose,
   onSave,
   initialDate = "",
+  activityToEdit,
   userId,
   biometrics,
   onOpenProfile,
@@ -84,6 +86,78 @@ export default function ActivityModal({
       biometrics,
     });
   }, [durationMinutes, avgHeartRate, biometrics]);
+
+  // Cargar datos cuando se abre en modo edición
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (activityToEdit) {
+      setEventType(activityToEdit.type);
+      setTitle(activityToEdit.title || "");
+      setDate(activityToEdit.date || "");
+      setTime(activityToEdit.time || "18:00");
+
+      if (activityToEdit.type === "match") {
+        if (
+          activityToEdit.result &&
+          (activityToEdit.result.toLowerCase().includes("programado") ||
+            activityToEdit.result.toLowerCase().includes("pendiente"))
+        ) {
+          setMatchStatus("pending");
+          setMyGoals("0");
+          setRivalGoals("0");
+        } else {
+          setMatchStatus("played");
+          const scoreMatch = activityToEdit.result?.match(/(\d+)\s*[-:]\s*(\d+)/);
+          if (scoreMatch) {
+            setMyGoals(scoreMatch[1]);
+            setRivalGoals(scoreMatch[2]);
+          } else {
+            setMyGoals("0");
+            setRivalGoals("0");
+          }
+        }
+      } else {
+        setMatchStatus("played");
+        setMyGoals("0");
+        setRivalGoals("0");
+      }
+
+      setPersonalGoals(activityToEdit.goals !== undefined ? String(activityToEdit.goals) : "0");
+      setPersonalAssists(activityToEdit.assists !== undefined ? String(activityToEdit.assists) : "0");
+      setTrainingIntensity(activityToEdit.intensity || "Media");
+      setDurationMinutes(
+        activityToEdit.duration_minutes !== undefined && activityToEdit.duration_minutes !== null
+          ? String(activityToEdit.duration_minutes)
+          : ""
+      );
+      setCalories(
+        activityToEdit.calories !== undefined && activityToEdit.calories !== null
+          ? String(activityToEdit.calories)
+          : ""
+      );
+      setAvgHeartRate(
+        activityToEdit.avg_heart_rate !== undefined && activityToEdit.avg_heart_rate !== null
+          ? String(activityToEdit.avg_heart_rate)
+          : ""
+      );
+      setMaxHeartRate(
+        activityToEdit.max_heart_rate !== undefined && activityToEdit.max_heart_rate !== null
+          ? String(activityToEdit.max_heart_rate)
+          : ""
+      );
+      setDistanceKm(
+        activityToEdit.distance_km !== undefined && activityToEdit.distance_km !== null
+          ? String(activityToEdit.distance_km)
+          : ""
+      );
+      setFitHrSeries(activityToEdit.hr_series);
+      setFitFileName(null);
+      setFitAutofilled(null);
+    } else {
+      resetForm();
+    }
+  }, [isOpen, activityToEdit]);
 
   if (!isOpen) return null;
 
@@ -208,7 +282,7 @@ export default function ActivityModal({
       hr_series: fitHrSeries,
     };
 
-    const success = await onSave(newEntry);
+    const success = await onSave(newEntry, activityToEdit?.id);
     setSaving(false);
 
     if (success) {
@@ -230,7 +304,9 @@ export default function ActivityModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h3 style={{ fontSize: "1.2rem", fontWeight: 700 }}>Registrar Actividad Deportiva</h3>
+          <h3 style={{ fontSize: "1.2rem", fontWeight: 700 }}>
+            {activityToEdit ? "Editar Actividad Deportiva" : "Registrar Actividad Deportiva"}
+          </h3>
           <button onClick={handleClose} disabled={saving} style={{ background: "none", border: "none", cursor: "pointer" }}>
             <X size={20} color="var(--text-dim)" />
           </button>
@@ -984,10 +1060,10 @@ export default function ActivityModal({
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? (
                 <>
-                  <Loader2 size={16} className="spin" /> Guardando en tu cuenta...
+                  <Loader2 size={16} className="spin" /> {activityToEdit ? "Actualizando actividad..." : "Guardando en tu cuenta..."}
                 </>
               ) : (
-                "Guardar Actividad"
+                activityToEdit ? "Guardar Cambios" : "Guardar Actividad"
               )}
             </button>
           </div>

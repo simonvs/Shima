@@ -10,30 +10,18 @@ import {
   Heart,
   Flame,
   Activity as ActivityIcon,
-  X
+  X,
+  Pencil
 } from "lucide-react";
 import { parseMatchResult } from "@/lib/matchUtils";
+import type { ActivityItem } from "@/types/activity";
 
-export interface CalendarEvent {
-  id: number;
-  type: "match" | "training";
-  title: string;
-  date: string; // YYYY-MM-DD
-  time?: string;
-  result?: string;
-  goals?: number;
-  assists?: number;
-  intensity?: string;
-  duration_minutes?: number;
-  calories?: number;
-  avg_heart_rate?: number;
-  max_heart_rate?: number;
-  distance_km?: number;
-}
+export type CalendarEvent = ActivityItem;
 
 interface SportsCalendarProps {
-  events: CalendarEvent[];
-  onSelectEvent?: (event: CalendarEvent) => void;
+  events: ActivityItem[];
+  onSelectEvent?: (event: ActivityItem) => void;
+  onEditEvent?: (event: ActivityItem) => void;
   onNewEventOnDate?: (dateStr: string) => void;
 }
 
@@ -44,9 +32,14 @@ const MONTH_NAMES = [
 
 const WEEK_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-export default function SportsCalendar({ events, onNewEventOnDate }: SportsCalendarProps) {
+export default function SportsCalendar({
+  events,
+  onNewEventOnDate,
+  onEditEvent,
+  onSelectEvent,
+}: SportsCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDayEvents, setSelectedDayEvents] = useState<{ dateStr: string; items: CalendarEvent[] } | null>(null);
+  const [selectedDayEvents, setSelectedDayEvents] = useState<{ dateStr: string; items: ActivityItem[] } | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -270,26 +263,52 @@ export default function SportsCalendar({ events, onNewEventOnDate }: SportsCalen
                       </span>
                       <h4 style={{ fontSize: "1rem", fontWeight: 600 }}>{ev.title}</h4>
                     </div>
-                    {ev.type === "match" && ev.result && (() => {
-                      const parsed = parseMatchResult(ev.result);
-                      if (!parsed) return <span className="event-score">{ev.result}</span>;
-                      return (
-                        <span className={`event-score ${parsed.className}`} title={parsed.label}>
-                          {parsed.scoreText}
-                          <small
-                            style={{
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.03em",
-                              opacity: 0.9,
-                            }}
-                          >
-                            {parsed.label}
-                          </small>
-                        </span>
-                      );
-                    })()}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      {ev.type === "match" && ev.result && (() => {
+                        const parsed = parseMatchResult(ev.result);
+                        if (!parsed) return <span className="event-score">{ev.result}</span>;
+                        return (
+                          <span className={`event-score ${parsed.className}`} title={parsed.label}>
+                            {parsed.scoreText}
+                            <small
+                              style={{
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.03em",
+                                opacity: 0.9,
+                              }}
+                            >
+                              {parsed.label}
+                            </small>
+                          </span>
+                        );
+                      })()}
+                      {onEditEvent && (
+                        <button
+                          onClick={() => {
+                            setSelectedDayEvents(null);
+                            onEditEvent(ev);
+                          }}
+                          title="Editar actividad"
+                          style={{
+                            background: "rgba(6, 182, 212, 0.12)",
+                            border: "1px solid rgba(6, 182, 212, 0.3)",
+                            color: "var(--accent-cyan)",
+                            borderRadius: "6px",
+                            padding: "3px 7px",
+                            fontSize: "0.72rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <Pencil size={12} /> Editar
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.8rem", color: "var(--text-dim)" }}>

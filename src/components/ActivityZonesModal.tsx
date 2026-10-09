@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { X, Heart, Flame, Clock, Zap } from "lucide-react";
+import { X, Heart, Flame, Clock, Zap, Pencil } from "lucide-react";
 import { calculateHrZones } from "@/lib/hrZones";
 import { parseMatchResult } from "@/lib/matchUtils";
 import HeartRateChart from "@/components/HeartRateChart";
@@ -11,6 +11,7 @@ interface ActivityZonesModalProps {
   activity: ActivityItem | null;
   isOpen: boolean;
   onClose: () => void;
+  onEditActivity?: (activity: ActivityItem) => void;
   userMaxHr?: number;
 }
 
@@ -18,6 +19,7 @@ export default function ActivityZonesModal({
   activity,
   isOpen,
   onClose,
+  onEditActivity,
   userMaxHr = 192,
 }: ActivityZonesModalProps) {
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
@@ -102,13 +104,39 @@ export default function ActivityZonesModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer" }}
-            title="Cerrar"
-          >
-            <X size={20} color="var(--text-dim)" />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {onEditActivity && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEditActivity(activity);
+                }}
+                title="Editar actividad"
+                style={{
+                  background: "rgba(6, 182, 212, 0.12)",
+                  border: "1px solid rgba(6, 182, 212, 0.3)",
+                  color: "var(--accent-cyan)",
+                  borderRadius: "6px",
+                  padding: "4px 8px",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontWeight: 600,
+                }}
+              >
+                <Pencil size={13} /> Editar
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{ background: "none", border: "none", cursor: "pointer" }}
+              title="Cerrar"
+            >
+              <X size={20} color="var(--text-dim)" />
+            </button>
+          </div>
         </div>
 
         {/* Resumen Métrico de la Sesión */}

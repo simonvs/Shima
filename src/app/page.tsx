@@ -31,9 +31,22 @@ export default function FootballDashboard() {
   const [events, setEvents] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activityToEdit, setActivityToEdit] = useState<ActivityItem | null>(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [selectedHrActivity, setSelectedHrActivity] = useState<ActivityItem | null>(null);
   const [zonesModalActivity, setZonesModalActivity] = useState<ActivityItem | null>(null);
+
+  const handleOpenNewModal = (dateStr?: string) => {
+    setActivityToEdit(null);
+    setSelectedCalendarDate(dateStr || "");
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (activity: ActivityItem) => {
+    setActivityToEdit(activity);
+    setSelectedCalendarDate(activity.date || "");
+    setIsModalOpen(true);
+  };
 
   // Cargar actividades filtrando estrictamente por el usuario conectado
   const loadActivities = async (userId: string) => {
@@ -141,39 +154,89 @@ export default function FootballDashboard() {
     }
   };
 
-  // Guardar actividad asociándola al user_id
-  const handleSaveActivity = async (activityData: Omit<ActivityItem, "id">): Promise<boolean> => {
+  // Guardar o actualizar actividad asociándola al user_id
+  const handleSaveActivity = async (
+    activityData: Omit<ActivityItem, "id">,
+    editId?: number
+  ): Promise<boolean> => {
     try {
       // Separar hr_series para proteger la inserción si la tabla remota no tiene esa columna
       const { hr_series, ...supabasePayload } = activityData;
-      let { data, error } = await supabase
-        .from("activities")
-        .insert([supabasePayload])
-        .select();
 
-      // Si la columna assists aún no existe en Supabase (error 42703), reintentar sin ella para no bloquear el guardado
-      if (error && (error.code === "42703" || error.message?.includes("assists"))) {
-        const { assists, ...payloadWithoutAssists } = supabasePayload;
-        const retry = await supabase
+      if (editId) {
+        // Modo Edición / Actualización
+        let { data, error } = await supabase
           .from("activities")
-          .insert([payloadWithoutAssists])
+          .update(supabasePayload)
+          .eq("id", editId)
           .select();
-        data = retry.data;
-        error = retry.error;
-      }
 
-      if (error) {
-        alert("Error al guardar en Supabase: " + error.message);
+        // Si la columna assists no existe en Supabase (error 42703), reintentar sin ella
+        if (error && (error.code === "42703" || error.message?.includes("assists"))) {
+          const { assists, ...payloadWithoutAssists } = supabasePayload;
+          const retry = await supabase
+            .from("activities")
+            .update(payloadWithoutAssists)
+            .eq("id", editId)
+            .select();
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (error) {
+          alert("Error al actualizar en Supabase: " + error.message);
+          return false;
+        }
+
+        if (data && data.length > 0) {
+          const updatedItem: ActivityItem = {
+            ...data[0],
+            hr_series: hr_series ?? events.find((e) => e.id === editId)?.hr_series,
+            assists: activityData.assists,
+          };
+          setEvents((prev) =>
+            prev.map((ev) => (ev.id === editId ? updatedItem : ev))
+          );
+          if (zonesModalActivity?.id === editId) {
+            setZonesModalActivity(updatedItem);
+          }
+          if (selectedHrActivity?.id === editId) {
+            setSelectedHrActivity(updatedItem);
+          }
+          return true;
+        }
+        return false;
+      } else {
+        // Modo Creación
+        let { data, error } = await supabase
+          .from("activities")
+          .insert([supabasePayload])
+          .select();
+
+        // Si la columna assists aún no existe en Supabase (error 42703), reintentar sin ella para no bloquear el guardado
+        if (error && (error.code === "42703" || error.message?.includes("assists"))) {
+          const { assists, ...payloadWithoutAssists } = supabasePayload;
+          const retry = await supabase
+            .from("activities")
+            .insert([payloadWithoutAssists])
+            .select();
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (error) {
+          alert("Error al guardar en Supabase: " + error.message);
+          return false;
+        }
+
+        if (data && data.length > 0) {
+          setEvents((prev) => [{ ...data[0], hr_series, assists: activityData.assists }, ...prev]);
+          return true;
+        }
         return false;
       }
-
-      if (data && data.length > 0) {
-        setEvents((prev) => [{ ...data[0], hr_series, assists: activityData.assists }, ...prev]);
-        return true;
-      }
-      return false;
     } catch (err) {
-      console.error("Error al guardar actividad:", err);
+      console.error("Error al procesar actividad:", err);
       return false;
     }
   };
@@ -262,10 +325,7 @@ export default function FootballDashboard() {
           <div className="header-actions">
             <button
               className="btn-primary"
-              onClick={() => {
-                setSelectedCalendarDate("");
-                setIsModalOpen(true);
-              }}
+              onClick={() => handleOpenNewModal()}
             >
               <Plus size={18} /> Nueva Sesión / Subir .FIT
             </button>
@@ -275,10 +335,8 @@ export default function FootballDashboard() {
         {activeTab === "calendar" ? (
           <SportsCalendar
             events={events}
-            onNewEventOnDate={(date) => {
-              setSelectedCalendarDate(date);
-              setIsModalOpen(true);
-            }}
+            onNewEventOnDate={(date) => handleOpenNewModal(date)}
+            onEditEvent={(event) => handleOpenEditModal(event)}
           />
         ) : (
           <>
@@ -316,10 +374,8 @@ export default function FootballDashboard() {
               activeTab={activeTab}
               loading={loading}
               onDeleteEvent={handleDeleteEvent}
-              onOpenModal={() => {
-                setSelectedCalendarDate("");
-                setIsModalOpen(true);
-              }}
+              onOpenModal={() => handleOpenNewModal()}
+              onEditActivity={(activity) => handleOpenEditModal(activity)}
               onSelectActivityForHr={(activity) => {
                 setSelectedHrActivity(activity);
                 setZonesModalActivity(activity);
@@ -329,13 +385,17 @@ export default function FootballDashboard() {
         )}
       </main>
 
-      {/* Modal para Crear y Cargar .FIT */}
+      {/* Modal para Crear, Editar y Cargar .FIT */}
       {isModalOpen && (
         <ActivityModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false);
+            setActivityToEdit(null);
+          }}
           onSave={handleSaveActivity}
           initialDate={selectedCalendarDate}
+          activityToEdit={activityToEdit}
           userId={user.id}
           biometrics={biometrics}
           onOpenProfile={() => setIsProfileModalOpen(true)}
@@ -358,6 +418,7 @@ export default function FootballDashboard() {
           isOpen={Boolean(zonesModalActivity)}
           activity={zonesModalActivity}
           onClose={() => setZonesModalActivity(null)}
+          onEditActivity={(activity) => handleOpenEditModal(activity)}
           userMaxHr={biometrics.max_heart_rate}
         />
       )}
