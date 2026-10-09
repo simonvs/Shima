@@ -353,8 +353,11 @@ export default function FootballDashboard() {
                   totalActivitiesCount={events.length}
                 />
 
-                <div className="grid-2col" style={{ marginBottom: "1.5rem" }}>
-                  <AnalyticsCharts />
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <AnalyticsCharts events={events} />
+                </div>
+
+                <div style={{ marginBottom: "1.5rem" }}>
                   <HrZonesCard
                     avgHeartRate={selectedHrActivity ? selectedHrActivity.avg_heart_rate : avgHR}
                     maxHeartRate={selectedHrActivity ? selectedHrActivity.max_heart_rate : undefined}
