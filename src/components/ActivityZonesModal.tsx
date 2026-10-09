@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { X, Heart, Flame, Clock, Zap, Pencil } from "lucide-react";
+import { X, Heart, Flame, Clock, Zap, Pencil, Activity } from "lucide-react";
 import { calculateHrZones } from "@/lib/hrZones";
 import { parseMatchResult } from "@/lib/matchUtils";
 import HeartRateChart from "@/components/HeartRateChart";
@@ -34,15 +34,22 @@ export default function ActivityZonesModal({
     return calculateHrZones(
       activity.avg_heart_rate,
       activity.max_heart_rate,
-      effectiveMaxHr
+      effectiveMaxHr,
+      activity.hr_series,
+      activity.duration_minutes,
+      activity.time_in_hr_zone
     );
   }, [activity, effectiveMaxHr]);
 
-  // Zona predominante
-  const dominantZone = useMemo(() => {
-    if (zones.length === 0) return null;
-    return [...zones].sort((a, b) => b.percentage - a.percentage)[0];
+  const hasRealPercentages = useMemo(() => {
+    return zones.some((z) => typeof z.percentage === "number");
   }, [zones]);
+
+  // Zona predominante (SOLO si hay porcentajes reales calculados)
+  const dominantZone = useMemo(() => {
+    if (!hasRealPercentages || zones.length === 0) return null;
+    return [...zones].sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0))[0];
+  }, [zones, hasRealPercentages]);
 
   if (!isOpen || !activity) return null;
 
@@ -197,8 +204,8 @@ export default function ActivityZonesModal({
           />
         </div>
 
-        {/* Zona Dominante Card */}
-        {dominantZone && (
+        {/* Zona Dominante Card (SOLO si hay telemetría real calculada) */}
+        {hasRealPercentages && dominantZone && (
           <div
             style={{
               padding: "0.85rem 1rem",
@@ -237,50 +244,84 @@ export default function ActivityZonesModal({
               <span style={{ fontSize: "1.3rem", fontWeight: 800, color: dominantZone.color }}>
                 {dominantZone.percentage}%
               </span>
-              {durationMin > 0 && (
+              {typeof dominantZone.minutes === "number" ? (
                 <p style={{ fontSize: "0.7rem", color: "var(--text-dim)", margin: 0 }}>
-                  ~{Math.round((dominantZone.percentage / 100) * durationMin)} min
+                  ~{dominantZone.minutes} min
                 </p>
-              )}
+              ) : durationMin > 0 ? (
+                <p style={{ fontSize: "0.7rem", color: "var(--text-dim)", margin: 0 }}>
+                  ~{Math.round(((dominantZone.percentage ?? 0) / 100) * durationMin)} min
+                </p>
+              ) : null}
             </div>
           </div>
         )}
 
-        {/* Barra de progreso combinada */}
-        <div style={{ marginBottom: "1.25rem" }}>
+        {/* Notificación informativa honesta cuando no hay archivo .FIT con telemetría */}
+        {!hasRealPercentages && (
           <div
             style={{
+              padding: "0.85rem 1rem",
+              background: "rgba(255, 255, 255, 0.02)",
+              border: "1px dashed var(--border-color)",
+              borderRadius: "var(--radius-md)",
+              marginBottom: "1.25rem",
               display: "flex",
-              height: "14px",
-              borderRadius: "9999px",
-              overflow: "hidden",
-              background: "rgba(255, 255, 255, 0.05)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              alignItems: "center",
+              gap: "0.75rem",
             }}
           >
-            {zones.map((z) => (
-              <div
-                key={z.zone}
-                style={{
-                  width: `${z.percentage}%`,
-                  background: z.color,
-                  transition: "width 0.4s ease",
-                  cursor: "pointer",
-                  opacity: selectedZone && selectedZone !== z.zone ? 0.4 : 1,
-                }}
-                title={`${z.zone}: ${z.percentage}% (${z.range})`}
-                onClick={() => setSelectedZone(selectedZone === z.zone ? null : z.zone)}
-              />
-            ))}
+            <Activity size={18} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+              <strong style={{ color: "var(--text-main)" }}>Distribución de tiempo no disponible:</strong>{" "}
+              Esta sesión no cuenta con telemetría segundo a segundo (.FIT). Para no mostrar datos simulados o irreales,
+              los porcentajes de zona no se inventan. A continuación se muestran los rangos fisiológicos calculados para tu FC Máx ({effectiveMaxHr} ppm).
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Barra de progreso combinada (solo si hay datos reales) */}
+        {hasRealPercentages && (
+          <div style={{ marginBottom: "1.25rem" }}>
+            <div
+              style={{
+                display: "flex",
+                height: "14px",
+                borderRadius: "9999px",
+                overflow: "hidden",
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              {zones.map((z) => (
+                <div
+                  key={z.zone}
+                  style={{
+                    width: `${z.percentage ?? 0}%`,
+                    background: z.color,
+                    transition: "width 0.4s ease",
+                    cursor: "pointer",
+                    opacity: selectedZone && selectedZone !== z.zone ? 0.4 : 1,
+                  }}
+                  title={`${z.zone}: ${z.percentage}% (${z.range})`}
+                  onClick={() => setSelectedZone(selectedZone === z.zone ? null : z.zone)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Desglose de las 5 Zonas */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.25rem" }}>
           {zones.map((z) => {
             const isSelected = selectedZone === z.zone;
-            const approxMinutes =
-              durationMin > 0 ? Math.round((z.percentage / 100) * durationMin) : null;
+            const hasPct = typeof z.percentage === "number";
+            const mins =
+              typeof z.minutes === "number"
+                ? z.minutes
+                : hasPct && durationMin > 0
+                ? Math.round(((z.percentage ?? 0) / 100) * durationMin)
+                : null;
 
             return (
               <div
@@ -328,13 +369,35 @@ export default function ActivityZonesModal({
                 </div>
 
                 <div style={{ textAlign: "right" }}>
-                  <span style={{ fontSize: "0.95rem", fontWeight: 700, color: z.color }}>
-                    {z.percentage}%
-                  </span>
-                  {approxMinutes !== null && (
-                    <p style={{ fontSize: "0.7rem", color: "var(--text-dim)", margin: 0 }}>
-                      ~{approxMinutes} min
-                    </p>
+                  {hasPct ? (
+                    <>
+                      <span style={{ fontSize: "0.95rem", fontWeight: 700, color: z.color }}>
+                        {z.percentage}%
+                      </span>
+                      {mins !== null && (
+                        <p style={{ fontSize: "0.7rem", color: "var(--text-dim)", margin: 0 }}>
+                          ~{mins} min
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          color: "var(--text-dim)",
+                          background: "rgba(255, 255, 255, 0.05)",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        Sin registro .FIT
+                      </span>
+                      <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
+                        {z.minHr} - {z.maxHr} ppm
+                      </p>
+                    </>
                   )}
                 </div>
               </div>

@@ -29,21 +29,61 @@ export default function HrZonesCard({
 
   const effectiveMaxHr = userOverrideMaxHr ?? userMaxHr ?? 192;
 
+  const selectedAct = useMemo(() => {
+    if (!selectedActivityId) return null;
+    return activities?.find((a) => a.id === selectedActivityId) || null;
+  }, [activities, selectedActivityId]);
+
   const zones = useMemo(() => {
+    if (selectedAct) {
+      return calculateHrZones(
+        selectedAct.avg_heart_rate,
+        selectedAct.max_heart_rate,
+        effectiveMaxHr,
+        selectedAct.hr_series,
+        selectedAct.duration_minutes,
+        selectedAct.time_in_hr_zone
+      );
+    }
+
+    // Si es vista global promedio, agregamos segundos por zona si existen actividades con telemetría real
+    const actsWithZones = (activities || []).filter(
+      (a) => Array.isArray(a.time_in_hr_zone) && a.time_in_hr_zone.length >= 5
+    );
+    if (actsWithZones.length > 0) {
+      const aggregateZones = [0, 0, 0, 0, 0];
+      for (const act of actsWithZones) {
+        act.time_in_hr_zone?.forEach((secs, i) => {
+          aggregateZones[i] = (aggregateZones[i] || 0) + secs;
+        });
+      }
+      return calculateHrZones(
+        avgHeartRate || undefined,
+        maxHeartRate || undefined,
+        effectiveMaxHr,
+        undefined,
+        undefined,
+        aggregateZones
+      );
+    }
+
     return calculateHrZones(
       avgHeartRate || undefined,
       maxHeartRate || undefined,
       effectiveMaxHr
     );
-  }, [avgHeartRate, maxHeartRate, effectiveMaxHr]);
+  }, [selectedAct, activities, avgHeartRate, maxHeartRate, effectiveMaxHr]);
 
   const hasData = Boolean(avgHeartRate && avgHeartRate > 0);
+  const hasRealPercentages = useMemo(() => {
+    return zones.some((z) => typeof z.percentage === "number");
+  }, [zones]);
 
-  // Zona predominante
+  // Zona predominante (SOLO si hay telemetría real calculada)
   const dominantZone = useMemo(() => {
-    if (!hasData) return null;
-    return [...zones].sort((a, b) => b.percentage - a.percentage)[0];
-  }, [zones, hasData]);
+    if (!hasData || !hasRealPercentages) return null;
+    return [...zones].sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0))[0];
+  }, [zones, hasData, hasRealPercentages]);
 
   const hrActivities = useMemo(() => {
     return (activities || []).filter((a) => a.avg_heart_rate && a.avg_heart_rate > 0);
@@ -173,44 +213,50 @@ export default function HrZonesCard({
               margin: 0,
             }}
           >
-            {dominantZone ? `${dominantZone.zone} (${dominantZone.percentage}%)` : "--"}
+            {dominantZone && typeof dominantZone.percentage === "number"
+              ? `${dominantZone.zone} (${dominantZone.percentage}%)`
+              : "--"}
           </p>
         </div>
       </div>
 
-      {/* Barra segmentada combinada de zonas */}
-      <div style={{ marginBottom: "1.25rem" }}>
-        <div
-          style={{
-            display: "flex",
-            height: "12px",
-            borderRadius: "9999px",
-            overflow: "hidden",
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          }}
-        >
-          {zones.map((z) => (
-            <div
-              key={z.zone}
-              style={{
-                width: `${z.percentage}%`,
-                background: z.color,
-                transition: "width 0.4s ease",
-                cursor: "pointer",
-                opacity: selectedZone && selectedZone !== z.zone ? 0.4 : 1,
-              }}
-              title={`${z.zone}: ${z.percentage}% (${z.range})`}
-              onClick={() => setSelectedZone(selectedZone === z.zone ? null : z.zone)}
-            />
-          ))}
+      {/* Barra segmentada combinada de zonas (solo si hay datos reales) */}
+      {hasRealPercentages && (
+        <div style={{ marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              display: "flex",
+              height: "12px",
+              borderRadius: "9999px",
+              overflow: "hidden",
+              background: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+            }}
+          >
+            {zones.map((z) => (
+              <div
+                key={z.zone}
+                style={{
+                  width: `${z.percentage ?? 0}%`,
+                  background: z.color,
+                  transition: "width 0.4s ease",
+                  cursor: "pointer",
+                  opacity: selectedZone && selectedZone !== z.zone ? 0.4 : 1,
+                }}
+                title={`${z.zone}: ${z.percentage}% (${z.range})`}
+                onClick={() => setSelectedZone(selectedZone === z.zone ? null : z.zone)}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Lista detallada de las 5 Zonas */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
         {zones.map((z) => {
           const isSelected = selectedZone === z.zone;
+          const hasPct = typeof z.percentage === "number";
+
           return (
             <div
               key={z.zone}
@@ -255,35 +301,52 @@ export default function HrZonesCard({
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                  <div
-                    style={{
-                      width: "80px",
-                      height: "6px",
-                      borderRadius: "9999px",
-                      background: "rgba(255, 255, 255, 0.08)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
+                  {hasPct ? (
+                    <>
+                      <div
+                        style={{
+                          width: "80px",
+                          height: "6px",
+                          borderRadius: "9999px",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${z.percentage}%`,
+                            height: "100%",
+                            background: z.color,
+                            borderRadius: "9999px",
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                          color: z.color,
+                          minWidth: "35px",
+                          textAlign: "right",
+                        }}
+                      >
+                        {z.percentage}%
+                      </span>
+                    </>
+                  ) : (
+                    <span
                       style={{
-                        width: `${z.percentage}%`,
-                        height: "100%",
-                        background: z.color,
-                        borderRadius: "9999px",
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        color: "var(--text-dim)",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
                       }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "0.85rem",
-                      fontWeight: 700,
-                      color: z.color,
-                      minWidth: "35px",
-                      textAlign: "right",
-                    }}
-                  >
-                    {z.percentage}%
-                  </span>
+                    >
+                      Sin telemetría .FIT
+                    </span>
+                  )}
                 </div>
               </div>
 

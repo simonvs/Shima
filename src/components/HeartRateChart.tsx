@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useRef } from "react";
+import { Heart, Activity } from "lucide-react";
 
 interface HeartRateChartProps {
   avgHeartRate?: number;
@@ -10,77 +11,12 @@ interface HeartRateChartProps {
   color?: string;
 }
 
-/**
- * Genera una curva fisiológica realista de frecuencia cardíaca para un partido o entrenamiento
- * con fases de calentamiento, sprints/intervalos de alta intensidad y pausas de recuperación.
- */
-function generatePhysiologicalHrSeries(
-  avgHr: number,
-  maxHr: number,
-  durationMin: number
-): number[] {
-  const points = 120;
-  const series: number[] = [];
-  const minHr = Math.max(80, avgHr - 45);
-
-  for (let i = 0; i < points; i++) {
-    const progress = i / (points - 1); // 0.0 a 1.0
-
-    // 1. Fase de calentamiento (primeros 5-8% de la sesión)
-    if (progress < 0.08) {
-      const warmupProgress = progress / 0.08;
-      const warmupHr = minHr + (avgHr - minHr) * Math.pow(warmupProgress, 0.7);
-      series.push(Math.round(warmupHr));
-      continue;
-    }
-
-    // 2. Ondas de juego / intervalos (frecuencias bajas y medias de posesión/ataques)
-    const wave1 = Math.sin(progress * Math.PI * 8) * 12; // ciclos de ~10 minutos
-    const wave2 = Math.cos(progress * Math.PI * 14) * 8; // intensidad rápida
-    const wave3 = Math.sin(progress * Math.PI * 22) * 5; // sprints cortos
-
-    // 3. Pausa de entretiempo si la sesión dura al menos 40 minutos (hacia el 45%-55%)
-    let halftimeDip = 0;
-    if (durationMin >= 40 && progress >= 0.46 && progress <= 0.54) {
-      const htProgress = Math.sin(((progress - 0.46) / 0.08) * Math.PI);
-      halftimeDip = htProgress * (avgHr - minHr - 5);
-    }
-
-    // 4. Picos de sprint aleatorios pero deterministas
-    const pseudoRandom = Math.sin(i * 12.9898) * 43758.5453;
-    const noise = (pseudoRandom - Math.floor(pseudoRandom) - 0.5) * 6;
-
-    // 5. Pico máximo garantizado cerca del minuto 70-80% de la sesión
-    let peakBoost = 0;
-    if (progress > 0.65 && progress < 0.82) {
-      peakBoost = Math.sin(((progress - 0.65) / 0.17) * Math.PI) * (maxHr - avgHr);
-    }
-
-    let calculatedHr = avgHr + wave1 + wave2 + wave3 + noise + peakBoost * 0.7 - halftimeDip;
-
-    // Asegurar que no exceda maxHr y no baje del mínimo
-    calculatedHr = Math.min(maxHr, Math.max(minHr, calculatedHr));
-    series.push(Math.round(calculatedHr));
-  }
-
-  // Ajustar para que la media y el máximo coincidan con precisión
-  const currentMax = Math.max(...series);
-  if (currentMax < maxHr) {
-    const peakIdx = Math.floor(points * 0.73);
-    series[peakIdx] = maxHr;
-    if (peakIdx > 0) series[peakIdx - 1] = Math.round((series[peakIdx - 1] + maxHr) / 2);
-    if (peakIdx < points - 1) series[peakIdx + 1] = Math.round((series[peakIdx + 1] + maxHr) / 2);
-  }
-
-  return series;
-}
-
 export default function HeartRateChart({
-  avgHeartRate = 153,
-  maxHeartRate = 187,
+  avgHeartRate,
+  maxHeartRate,
   durationMinutes = 90,
   hrSeries,
-  color = "#e11d48", // magenta / pink Garmin
+  color = "#f43f5e",
 }: HeartRateChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<{
@@ -91,26 +27,77 @@ export default function HeartRateChart({
   } | null>(null);
 
   const duration = durationMinutes || 90;
-  const effectiveMaxHr = Math.max(maxHeartRate || 187, avgHeartRate || 150);
-  const effectiveAvgHr = avgHeartRate || Math.round(effectiveMaxHr * 0.82);
+  const effectiveMaxHr = maxHeartRate || avgHeartRate || 0;
+  const effectiveAvgHr = avgHeartRate || 0;
 
-  // Serie de puntos
-  const dataPoints = useMemo(() => {
-    if (hrSeries && hrSeries.length >= 10) {
-      return hrSeries;
-    }
-    return generatePhysiologicalHrSeries(effectiveAvgHr, effectiveMaxHr, duration);
-  }, [hrSeries, effectiveAvgHr, effectiveMaxHr, duration]);
+  // Verificamos si existen datos 100% reales de telemetría continua
+  const hasRealSeries = Array.isArray(hrSeries) && hrSeries.length >= 5;
 
-  // Dimensiones del SVG
+  // Si no hay serie real de telemetría, no inventamos ondas sintéticas
+  if (!hasRealSeries) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "1rem 1.25rem",
+          background: "rgba(255, 255, 255, 0.02)",
+          border: "1px dashed var(--border-color)",
+          borderRadius: "var(--radius-md)",
+          gap: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "var(--radius-sm)",
+              background: "rgba(244, 63, 94, 0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--accent-rose)",
+              flexShrink: 0,
+            }}
+          >
+            <Heart size={18} />
+          </div>
+          <div>
+            <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+              Curva continua de FC no disponible
+            </p>
+            <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
+              {effectiveAvgHr > 0
+                ? `Esta sesión tiene FC Media (${effectiveAvgHr} ppm)${effectiveMaxHr > 0 ? ` y Máx (${effectiveMaxHr} ppm)` : ""}.`
+                : "Sin telemetría registrada."}{" "}
+              Para ver el gráfico continuo segundo a segundo, sube el archivo .FIT del sensor.
+            </p>
+          </div>
+        </div>
+
+        {effectiveAvgHr > 0 && (
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <span style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--accent-rose)" }}>
+              {effectiveAvgHr} <small style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>ppm</small>
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Dimensiones del SVG con datos reales
+  const dataPoints = hrSeries;
   const svgWidth = 500;
   const svgHeight = 90;
-  const paddingLeft = 30; // espacio para la etiqueta Y
+  const paddingLeft = 30;
   const paddingRight = 10;
   const chartWidth = svgWidth - paddingLeft - paddingRight;
 
-  const yMin = 0; // como en la imagen de Garmin donde la base marca 0
-  const yMax = effectiveMaxHr + 5;
+  const yMin = 0;
+  const yMax = Math.max(effectiveMaxHr + 5, Math.max(...dataPoints) + 5);
 
   const getY = (hr: number) => {
     const normalized = (hr - yMin) / (yMax - yMin);
@@ -121,9 +108,8 @@ export default function HeartRateChart({
     return paddingLeft + (index / Math.max(1, total - 1)) * chartWidth;
   };
 
-  // Construir path suave (Catmull-Rom o Bézier cúbica)
-  const pathData = useMemo(() => {
-    if (dataPoints.length === 0) return "";
+  // Construir path suave con los datos reales
+  const pathData = (() => {
     const total = dataPoints.length;
     const coords = dataPoints.map((hr, idx) => ({
       x: paddingLeft + (idx / (total - 1)) * chartWidth,
@@ -137,7 +123,6 @@ export default function HeartRateChart({
       const p2 = coords[i + 1];
       const p3 = coords[i + 2 < coords.length ? i + 2 : coords.length - 1];
 
-      // Puntos de control para suavizado
       const cp1x = p1.x + (p2.x - p0.x) / 6;
       const cp1y = p1.y + (p2.y - p0.y) / 6;
       const cp2x = p2.x - (p3.x - p1.x) / 6;
@@ -146,10 +131,9 @@ export default function HeartRateChart({
       d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
     }
     return d;
-  }, [dataPoints, chartWidth, yMax, yMin]);
+  })();
 
-  // Posición Y de la línea punteada de frecuencia cardíaca máxima
-  const maxLineY = getY(effectiveMaxHr);
+  const maxLineY = getY(effectiveMaxHr || Math.max(...dataPoints));
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -185,7 +169,7 @@ export default function HeartRateChart({
         position: "relative",
       }}
     >
-      {/* Columna Izquierda: Información de Frecuencia Cardíaca */}
+      {/* Columna Izquierda: Información de Frecuencia Cardíaca Real */}
       <div
         style={{
           width: "140px",
@@ -229,9 +213,8 @@ export default function HeartRateChart({
         </span>
       </div>
 
-      {/* Área Derecha: Gráfico de Telemetría SVG */}
+      {/* Área Derecha: Gráfico de Telemetría SVG 100% Real */}
       <div style={{ flex: 1, position: "relative", minWidth: 0, padding: "0 0.25rem" }}>
-        {/* Barra superior de acento (cian / celeste como en Garmin) */}
         <div
           style={{
             position: "absolute",
@@ -251,7 +234,6 @@ export default function HeartRateChart({
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
-          {/* Etiquetas del eje Y a la izquierda */}
           <text
             x={paddingLeft - 6}
             y={maxLineY + 3}
@@ -274,7 +256,7 @@ export default function HeartRateChart({
             0
           </text>
 
-          {/* Línea horizontal discontinua en el valor Máximo (rosa) */}
+          {/* Línea horizontal en valor Máximo */}
           <line
             x1={paddingLeft}
             y1={maxLineY}
@@ -286,18 +268,20 @@ export default function HeartRateChart({
             strokeOpacity="0.6"
           />
 
-          {/* Línea horizontal tenue en la media */}
-          <line
-            x1={paddingLeft}
-            y1={getY(effectiveAvgHr)}
-            x2={svgWidth - paddingRight}
-            y2={getY(effectiveAvgHr)}
-            stroke="rgba(255, 255, 255, 0.1)"
-            strokeDasharray="2 3"
-            strokeWidth="1"
-          />
+          {/* Línea horizontal en promedio */}
+          {effectiveAvgHr > 0 && (
+            <line
+              x1={paddingLeft}
+              y1={getY(effectiveAvgHr)}
+              x2={svgWidth - paddingRight}
+              y2={getY(effectiveAvgHr)}
+              stroke="rgba(255, 255, 255, 0.1)"
+              strokeDasharray="2 3"
+              strokeWidth="1"
+            />
+          )}
 
-          {/* Área sombreada bajo la curva */}
+          {/* Área sombreada */}
           <defs>
             <linearGradient id="hrAreaGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.18" />
@@ -305,13 +289,11 @@ export default function HeartRateChart({
             </linearGradient>
           </defs>
 
-          {/* Relleno con gradiente */}
           <path
             d={`${pathData} L ${getX(dataPoints.length - 1)} ${svgHeight} L ${getX(0)} ${svgHeight} Z`}
             fill="url(#hrAreaGradient)"
           />
 
-          {/* Trazo continuo de Frecuencia Cardíaca (Magenta/Rosa) */}
           <path
             d={pathData}
             fill="none"
@@ -321,10 +303,8 @@ export default function HeartRateChart({
             strokeLinejoin="round"
           />
 
-          {/* Indicador interactivo hover */}
           {hoveredPoint && (
             <>
-              {/* Línea vertical guía */}
               <line
                 x1={hoveredPoint.x}
                 y1={0}
@@ -334,20 +314,18 @@ export default function HeartRateChart({
                 strokeDasharray="2 2"
                 strokeWidth="1"
               />
-              {/* Punto luminoso */}
               <circle
                 cx={hoveredPoint.x}
                 cy={hoveredPoint.y}
                 r="4.5"
                 fill="#ffffff"
                 stroke={color}
-                strokeWidth="2.5"
+                strokeWidth={2.5}
               />
             </>
           )}
         </svg>
 
-        {/* Tooltip flotante interactivo */}
         {hoveredPoint && (
           <div
             style={{

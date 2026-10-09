@@ -61,7 +61,24 @@ export default function FootballDashboard() {
       if (error) {
         console.error("Error al cargar actividades:", error.message);
       } else if (data) {
-        setEvents(data);
+        // Hidratar telemetría local (hr_series y time_in_hr_zone) desde localStorage
+        const hydrated: ActivityItem[] = data.map((item) => {
+          try {
+            const raw = localStorage.getItem(`shima_telemetry_${item.id}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              return {
+                ...item,
+                hr_series: parsed.hr_series ?? item.hr_series,
+                time_in_hr_zone: parsed.time_in_hr_zone ?? item.time_in_hr_zone,
+              };
+            }
+          } catch (e) {
+            console.error("Error al hidratar telemetría:", e);
+          }
+          return item;
+        });
+        setEvents(hydrated);
       }
     } catch (err) {
       console.error("Error inesperado:", err);
@@ -160,8 +177,8 @@ export default function FootballDashboard() {
     editId?: number
   ): Promise<boolean> => {
     try {
-      // Separar hr_series para proteger la inserción si la tabla remota no tiene esa columna
-      const { hr_series, ...supabasePayload } = activityData;
+      // Separar telemetría pesada para proteger la inserción si la tabla remota no tiene esas columnas
+      const { hr_series, time_in_hr_zone, ...supabasePayload } = activityData;
 
       if (editId) {
         // Modo Edición / Actualización
@@ -189,9 +206,28 @@ export default function FootballDashboard() {
         }
 
         if (data && data.length > 0) {
+          const effectiveHrSeries = hr_series ?? events.find((e) => e.id === editId)?.hr_series;
+          const effectiveTimeInHrZone =
+            time_in_hr_zone ?? events.find((e) => e.id === editId)?.time_in_hr_zone;
+
+          if (effectiveHrSeries || effectiveTimeInHrZone) {
+            try {
+              localStorage.setItem(
+                `shima_telemetry_${editId}`,
+                JSON.stringify({
+                  hr_series: effectiveHrSeries,
+                  time_in_hr_zone: effectiveTimeInHrZone,
+                })
+              );
+            } catch (e) {
+              console.error("Error al guardar telemetría local:", e);
+            }
+          }
+
           const updatedItem: ActivityItem = {
             ...data[0],
-            hr_series: hr_series ?? events.find((e) => e.id === editId)?.hr_series,
+            hr_series: effectiveHrSeries,
+            time_in_hr_zone: effectiveTimeInHrZone,
             assists: activityData.assists,
           };
           setEvents((prev) =>
@@ -230,7 +266,25 @@ export default function FootballDashboard() {
         }
 
         if (data && data.length > 0) {
-          setEvents((prev) => [{ ...data[0], hr_series, assists: activityData.assists }, ...prev]);
+          const newId = data[0].id;
+          if (hr_series || time_in_hr_zone) {
+            try {
+              localStorage.setItem(
+                `shima_telemetry_${newId}`,
+                JSON.stringify({ hr_series, time_in_hr_zone })
+              );
+            } catch (e) {
+              console.error("Error al guardar telemetría local:", e);
+            }
+          }
+
+          const newItem: ActivityItem = {
+            ...data[0],
+            hr_series,
+            time_in_hr_zone,
+            assists: activityData.assists,
+          };
+          setEvents((prev) => [newItem, ...prev]);
           return true;
         }
         return false;
@@ -246,6 +300,11 @@ export default function FootballDashboard() {
     if (!confirm("¿Deseas eliminar este registro de la base de datos?")) return;
     const { error } = await supabase.from("activities").delete().eq("id", id);
     if (!error) {
+      try {
+        localStorage.removeItem(`shima_telemetry_${id}`);
+      } catch (e) {
+        console.error("Error al limpiar telemetría local:", e);
+      }
       setEvents((prev) => prev.filter((ev) => ev.id !== id));
     } else {
       alert("Error al eliminar: " + error.message);

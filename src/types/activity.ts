@@ -15,6 +15,7 @@ export interface ActivityItem {
   max_heart_rate?: number;
   distance_km?: number;
   hr_series?: number[];
+  time_in_hr_zone?: number[];
 }
 
 export type TabType = "dashboard" | "matches" | "trainings" | "calendar";

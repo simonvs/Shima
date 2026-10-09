@@ -53,6 +53,7 @@ export default function ActivityModal({
   const [maxHeartRate, setMaxHeartRate] = useState("");
   const [distanceKm, setDistanceKm] = useState("");
   const [fitHrSeries, setFitHrSeries] = useState<number[] | undefined>(undefined);
+  const [fitTimeInHrZone, setFitTimeInHrZone] = useState<number[] | undefined>(undefined);
 
   const [parsingFit, setParsingFit] = useState(false);
   const [fitFileName, setFitFileName] = useState<string | null>(null);
@@ -152,6 +153,7 @@ export default function ActivityModal({
           : ""
       );
       setFitHrSeries(activityToEdit.hr_series);
+      setFitTimeInHrZone(activityToEdit.time_in_hr_zone);
       setFitFileName(null);
       setFitAutofilled(null);
     } else {
@@ -180,6 +182,7 @@ export default function ActivityModal({
     setMaxHeartRate("");
     setDistanceKm("");
     setFitHrSeries(undefined);
+    setFitTimeInHrZone(undefined);
     setFitFileName(null);
     setFitAutofilled(null);
     if (fileInputRef.current) {
@@ -216,6 +219,7 @@ export default function ActivityModal({
       if (summary.maxHeartRate) setMaxHeartRate(summary.maxHeartRate.toString());
       if (summary.distanceKm !== undefined) setDistanceKm(summary.distanceKm.toString());
       if (summary.hrSeries && summary.hrSeries.length > 0) setFitHrSeries(summary.hrSeries);
+      if (summary.timeInHrZone && summary.timeInHrZone.length > 0) setFitTimeInHrZone(summary.timeInHrZone);
 
       if (summary.sport) {
         const s = summary.sport.toLowerCase();
@@ -280,6 +284,7 @@ export default function ActivityModal({
       max_heart_rate: maxHeartRate ? parseInt(maxHeartRate, 10) : undefined,
       distance_km: distanceKm ? parseFloat(distanceKm) : undefined,
       hr_series: fitHrSeries,
+      time_in_hr_zone: fitTimeInHrZone,
     };
 
     const success = await onSave(newEntry, activityToEdit?.id);

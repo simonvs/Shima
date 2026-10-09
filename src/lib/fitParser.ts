@@ -14,6 +14,7 @@ export interface ParsedFitSummary {
   time?: string; // HH:MM
   sport?: string;
   hrSeries?: number[];
+  timeInHrZone?: number[];
 }
 
 function toArray(val: any): any[] {
@@ -355,6 +356,16 @@ export function parseFitFile(
           }
         }
 
+        // 5b. Extraer Zonas Cardíacas nativas del dispositivo si existen
+        for (const s of sessions) {
+          if (Array.isArray(s.time_in_hr_zone) && s.time_in_hr_zone.length >= 5) {
+            summary.timeInHrZone = s.time_in_hr_zone.map((sec: any) =>
+              typeof sec === "number" ? Math.round(sec) : 0
+            );
+            break;
+          }
+        }
+
         // 6. Procesar Records (trackpoints) para fallbacks completos y seguros
         if (records.length > 0) {
           let minTimestampMs: number | null = null;
@@ -419,7 +430,7 @@ export function parseFitFile(
 
           // Muestrear serie temporal de FC continua para telemetría
           if (rawHrPoints.length >= 10) {
-            const targetPoints = Math.min(rawHrPoints.length, 120);
+            const targetPoints = Math.min(rawHrPoints.length, 150);
             const step = rawHrPoints.length / targetPoints;
             const sampled: number[] = [];
             for (let i = 0; i < targetPoints; i++) {
@@ -427,6 +438,26 @@ export function parseFitFile(
               sampled.push(rawHrPoints[idx]);
             }
             summary.hrSeries = sampled;
+
+            // Calcular distribución exacta de tiempo por zona a partir de trackpoints reales
+            if (!summary.timeInHrZone) {
+              const effectiveMax = summary.maxHeartRate || (userBiometrics?.max_heart_rate ?? 192);
+              const zRanges = [
+                { min: effectiveMax * 0.5, max: effectiveMax * 0.6 },
+                { min: effectiveMax * 0.6, max: effectiveMax * 0.7 },
+                { min: effectiveMax * 0.7, max: effectiveMax * 0.8 },
+                { min: effectiveMax * 0.8, max: effectiveMax * 0.9 },
+                { min: effectiveMax * 0.9, max: effectiveMax * 1.15 },
+              ];
+
+              const totalSecs = (summary.durationMinutes || 0) * 60 || rawHrPoints.length;
+              const secPerPoint = totalSecs / rawHrPoints.length;
+
+              summary.timeInHrZone = zRanges.map((z) => {
+                const count = rawHrPoints.filter((hr) => hr >= z.min && hr < z.max).length;
+                return Math.round(count * secPerPoint);
+              });
+            }
           }
 
           // Fallback Duración
