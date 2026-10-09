@@ -36,11 +36,10 @@ export default function ActivityModal({
   });
   const [time, setTime] = useState("18:00");
   
-  // Marcador interactivo error-proof
+  // Marcador interactivo error-proof (deducido estrictamente según los goles)
   const [myGoals, setMyGoals] = useState("0");
   const [rivalGoals, setRivalGoals] = useState("0");
   const [matchStatus, setMatchStatus] = useState<"played" | "pending">("played");
-  const [outcomeOverride, setOutcomeOverride] = useState<"auto" | "victory" | "draw" | "defeat">("auto");
   const [personalGoals, setPersonalGoals] = useState("0");
   const [trainingIntensity, setTrainingIntensity] = useState("Media");
 
@@ -62,17 +61,16 @@ export default function ActivityModal({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Cálculo reactivo del resultado del partido
+  // Cálculo reactivo del resultado del partido (deducido exclusivamente según los goles ingresados)
   const currentOutcome = useMemo(() => {
     if (matchStatus === "pending") return "pending";
-    if (outcomeOverride !== "auto") return outcomeOverride;
     const my = parseInt(myGoals, 10);
     const riv = parseInt(rivalGoals, 10);
     if (isNaN(my) || isNaN(riv)) return "draw";
     if (my > riv) return "victory";
     if (my < riv) return "defeat";
     return "draw";
-  }, [matchStatus, outcomeOverride, myGoals, rivalGoals]);
+  }, [matchStatus, myGoals, rivalGoals]);
 
   // Predicción reactiva de gasto calórico por FC (Keytel et al.)
   const livePrediction = useMemo(() => {
@@ -98,7 +96,6 @@ export default function ActivityModal({
     setMyGoals("0");
     setRivalGoals("0");
     setMatchStatus("played");
-    setOutcomeOverride("auto");
     setPersonalGoals("0");
     setTrainingIntensity("Media");
     setDurationMinutes("");
@@ -452,7 +449,6 @@ export default function ActivityModal({
                         <button
                           type="button"
                           onClick={() => {
-                            setOutcomeOverride("auto");
                             setMyGoals(String(Math.max(0, (parseInt(myGoals, 10) || 0) - 1)));
                           }}
                           style={{
@@ -473,7 +469,6 @@ export default function ActivityModal({
                           min="0"
                           value={myGoals}
                           onChange={(e) => {
-                            setOutcomeOverride("auto");
                             setMyGoals(e.target.value);
                           }}
                           style={{
@@ -489,7 +484,6 @@ export default function ActivityModal({
                         <button
                           type="button"
                           onClick={() => {
-                            setOutcomeOverride("auto");
                             setMyGoals(String((parseInt(myGoals, 10) || 0) + 1));
                           }}
                           style={{
@@ -552,7 +546,6 @@ export default function ActivityModal({
                         <button
                           type="button"
                           onClick={() => {
-                            setOutcomeOverride("auto");
                             setRivalGoals(String(Math.max(0, (parseInt(rivalGoals, 10) || 0) - 1)));
                           }}
                           style={{
@@ -573,7 +566,6 @@ export default function ActivityModal({
                           min="0"
                           value={rivalGoals}
                           onChange={(e) => {
-                            setOutcomeOverride("auto");
                             setRivalGoals(e.target.value);
                           }}
                           style={{
@@ -589,7 +581,6 @@ export default function ActivityModal({
                         <button
                           type="button"
                           onClick={() => {
-                            setOutcomeOverride("auto");
                             setRivalGoals(String((parseInt(rivalGoals, 10) || 0) + 1));
                           }}
                           style={{
@@ -609,68 +600,48 @@ export default function ActivityModal({
                     </div>
                   </div>
 
-                  {/* Botones de Selección Rápida de Resultado */}
-                  <div style={{ display: "flex", gap: "0.4rem" }}>
-                    <button
-                      type="button"
-                      onClick={() => setOutcomeOverride(outcomeOverride === "victory" ? "auto" : "victory")}
+                  {/* Indicador automático de resultado deducido según los goles */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.55rem 0.85rem",
+                      borderRadius: "var(--radius-sm)",
+                      background:
+                        currentOutcome === "victory"
+                          ? "rgba(16, 185, 129, 0.08)"
+                          : currentOutcome === "defeat"
+                          ? "rgba(244, 63, 94, 0.08)"
+                          : "rgba(245, 158, 11, 0.08)",
+                      border: `1px solid ${
+                        currentOutcome === "victory"
+                          ? "rgba(16, 185, 129, 0.3)"
+                          : currentOutcome === "defeat"
+                          ? "rgba(244, 63, 94, 0.3)"
+                          : "rgba(245, 158, 11, 0.3)"
+                      }`,
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <span style={{ color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      Resultado deducido:
+                    </span>
+                    <span
                       style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "var(--radius-sm)",
-                        border: `1px solid ${
-                          currentOutcome === "victory" ? "var(--accent-emerald)" : "var(--border-color)"
-                        }`,
-                        background:
-                          currentOutcome === "victory" ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.02)",
-                        color: currentOutcome === "victory" ? "var(--accent-emerald)" : "var(--text-dim)",
-                        fontSize: "0.75rem",
                         fontWeight: 700,
-                        cursor: "pointer",
+                        color:
+                          currentOutcome === "victory"
+                            ? "var(--accent-emerald)"
+                            : currentOutcome === "defeat"
+                            ? "var(--accent-rose)"
+                            : "var(--accent-amber)",
                       }}
                     >
-                      ✓ Victoria
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOutcomeOverride(outcomeOverride === "draw" ? "auto" : "draw")}
-                      style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "var(--radius-sm)",
-                        border: `1px solid ${
-                          currentOutcome === "draw" ? "var(--accent-amber)" : "var(--border-color)"
-                        }`,
-                        background:
-                          currentOutcome === "draw" ? "rgba(245, 158, 11, 0.2)" : "rgba(255, 255, 255, 0.02)",
-                        color: currentOutcome === "draw" ? "var(--accent-amber)" : "var(--text-dim)",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      = Empate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOutcomeOverride(outcomeOverride === "defeat" ? "auto" : "defeat")}
-                      style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "var(--radius-sm)",
-                        border: `1px solid ${
-                          currentOutcome === "defeat" ? "var(--accent-rose)" : "var(--border-color)"
-                        }`,
-                        background:
-                          currentOutcome === "defeat" ? "rgba(244, 63, 94, 0.2)" : "rgba(255, 255, 255, 0.02)",
-                        color: currentOutcome === "defeat" ? "var(--accent-rose)" : "var(--text-dim)",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✕ Derrota
-                    </button>
+                      {currentOutcome === "victory" && "Victoria (Ganó tu equipo)"}
+                      {currentOutcome === "draw" && "Empate (Mismos goles)"}
+                      {currentOutcome === "defeat" && "Derrota (Ganó el rival)"}
+                    </span>
                   </div>
                 </>
               )}
