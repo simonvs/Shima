@@ -61,22 +61,45 @@ export default function FootballDashboard() {
       if (error) {
         console.error("Error al cargar actividades:", error.message);
       } else if (data) {
-        // Hidratar telemetría local (hr_series y time_in_hr_zone) desde localStorage
+        // Supabase es la fuente primaria de verdad.
+        // Si hay telemetría en localStorage que faltaba en Supabase, la migra automáticamente a la nube.
         const hydrated: ActivityItem[] = data.map((item) => {
-          try {
-            const raw = localStorage.getItem(`shima_telemetry_${item.id}`);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              return {
-                ...item,
-                hr_series: parsed.hr_series ?? item.hr_series,
-                time_in_hr_zone: parsed.time_in_hr_zone ?? item.time_in_hr_zone,
-              };
+          let series = item.hr_series;
+          let zones = item.time_in_hr_zone;
+
+          if (!series || series.length === 0) {
+            try {
+              const raw = localStorage.getItem(`shima_telemetry_${item.id}`);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed.hr_series && parsed.hr_series.length > 0) {
+                  series = parsed.hr_series;
+                  zones = parsed.time_in_hr_zone || zones;
+                  // Sincronizar automáticamente hacia Supabase
+                  void supabase
+                    .from("activities")
+                    .update({ hr_series: series, time_in_hr_zone: zones })
+                    .eq("id", item.id);
+                }
+              }
+            } catch (e) {
+              console.error("Error al sincronizar telemetría local a Supabase:", e);
             }
-          } catch (e) {
-            console.error("Error al hidratar telemetría:", e);
+          } else {
+            // Respaldar también localmente para carga instantánea
+            try {
+              localStorage.setItem(
+                `shima_telemetry_${item.id}`,
+                JSON.stringify({ hr_series: series, time_in_hr_zone: zones })
+              );
+            } catch {}
           }
-          return item;
+
+          return {
+            ...item,
+            hr_series: series,
+            time_in_hr_zone: zones,
+          };
         });
         setEvents(hydrated);
       }
@@ -177,23 +200,22 @@ export default function FootballDashboard() {
     editId?: number
   ): Promise<boolean> => {
     try {
-      // Separar telemetría pesada para proteger la inserción si la tabla remota no tiene esas columnas
-      const { hr_series, time_in_hr_zone, ...supabasePayload } = activityData;
+      const payload: Record<string, any> = { ...activityData };
 
       if (editId) {
         // Modo Edición / Actualización
         let { data, error } = await supabase
           .from("activities")
-          .update(supabasePayload)
+          .update(payload)
           .eq("id", editId)
           .select();
 
-        // Si la columna assists no existe en Supabase (error 42703), reintentar sin ella
-        if (error && (error.code === "42703" || error.message?.includes("assists"))) {
-          const { assists, ...payloadWithoutAssists } = supabasePayload;
+        // Si alguna columna no existe en Supabase (error 42703), reintentar sin campos opcionales
+        if (error && error.code === "42703") {
+          const { assists, hr_series, time_in_hr_zone, ...payloadFallback } = payload;
           const retry = await supabase
             .from("activities")
-            .update(payloadWithoutAssists)
+            .update(payloadFallback)
             .eq("id", editId)
             .select();
           data = retry.data;
@@ -206,9 +228,9 @@ export default function FootballDashboard() {
         }
 
         if (data && data.length > 0) {
-          const effectiveHrSeries = hr_series ?? events.find((e) => e.id === editId)?.hr_series;
+          const effectiveHrSeries = activityData.hr_series ?? events.find((e) => e.id === editId)?.hr_series;
           const effectiveTimeInHrZone =
-            time_in_hr_zone ?? events.find((e) => e.id === editId)?.time_in_hr_zone;
+            activityData.time_in_hr_zone ?? events.find((e) => e.id === editId)?.time_in_hr_zone;
 
           if (effectiveHrSeries || effectiveTimeInHrZone) {
             try {
@@ -246,15 +268,15 @@ export default function FootballDashboard() {
         // Modo Creación
         let { data, error } = await supabase
           .from("activities")
-          .insert([supabasePayload])
+          .insert([payload])
           .select();
 
-        // Si la columna assists aún no existe en Supabase (error 42703), reintentar sin ella para no bloquear el guardado
-        if (error && (error.code === "42703" || error.message?.includes("assists"))) {
-          const { assists, ...payloadWithoutAssists } = supabasePayload;
+        // Fallback si alguna columna no existe aún
+        if (error && error.code === "42703") {
+          const { assists, hr_series, time_in_hr_zone, ...payloadFallback } = payload;
           const retry = await supabase
             .from("activities")
-            .insert([payloadWithoutAssists])
+            .insert([payloadFallback])
             .select();
           data = retry.data;
           error = retry.error;
@@ -267,11 +289,14 @@ export default function FootballDashboard() {
 
         if (data && data.length > 0) {
           const newId = data[0].id;
-          if (hr_series || time_in_hr_zone) {
+          if (activityData.hr_series || activityData.time_in_hr_zone) {
             try {
               localStorage.setItem(
                 `shima_telemetry_${newId}`,
-                JSON.stringify({ hr_series, time_in_hr_zone })
+                JSON.stringify({
+                  hr_series: activityData.hr_series,
+                  time_in_hr_zone: activityData.time_in_hr_zone,
+                })
               );
             } catch (e) {
               console.error("Error al guardar telemetría local:", e);
@@ -280,8 +305,8 @@ export default function FootballDashboard() {
 
           const newItem: ActivityItem = {
             ...data[0],
-            hr_series,
-            time_in_hr_zone,
+            hr_series: activityData.hr_series,
+            time_in_hr_zone: activityData.time_in_hr_zone,
             assists: activityData.assists,
           };
           setEvents((prev) => [newItem, ...prev]);
