@@ -146,10 +146,21 @@ export default function FootballDashboard() {
     try {
       // Separar hr_series para proteger la inserción si la tabla remota no tiene esa columna
       const { hr_series, ...supabasePayload } = activityData;
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("activities")
         .insert([supabasePayload])
         .select();
+
+      // Si la columna assists aún no existe en Supabase (error 42703), reintentar sin ella para no bloquear el guardado
+      if (error && (error.code === "42703" || error.message?.includes("assists"))) {
+        const { assists, ...payloadWithoutAssists } = supabasePayload;
+        const retry = await supabase
+          .from("activities")
+          .insert([payloadWithoutAssists])
+          .select();
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (error) {
         alert("Error al guardar en Supabase: " + error.message);
@@ -157,7 +168,7 @@ export default function FootballDashboard() {
       }
 
       if (data && data.length > 0) {
-        setEvents((prev) => [{ ...data[0], hr_series }, ...prev]);
+        setEvents((prev) => [{ ...data[0], hr_series, assists: activityData.assists }, ...prev]);
         return true;
       }
       return false;
@@ -204,6 +215,7 @@ export default function FootballDashboard() {
 
   // Métricas calculadas en vivo del usuario actual
   const totalGoles = events.reduce((acc, curr) => acc + (curr.goals || 0), 0);
+  const totalAsistencias = events.reduce((acc, curr) => acc + (curr.assists || 0), 0);
   const totalCalorias = events.reduce((acc, curr) => acc + (curr.calories || 0), 0);
   const totalDistancia = events.reduce((acc, curr) => acc + (curr.distance_km || 0), 0);
   const hrEvents = events.filter((e) => e.avg_heart_rate);
@@ -275,6 +287,7 @@ export default function FootballDashboard() {
               <>
                 <StatCards
                   totalGoles={totalGoles}
+                  totalAsistencias={totalAsistencias}
                   partidosCount={partidosCount}
                   totalCalorias={totalCalorias}
                   avgHR={avgHR}

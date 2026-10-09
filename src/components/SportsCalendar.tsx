@@ -22,6 +22,7 @@ export interface CalendarEvent {
   time?: string;
   result?: string;
   goals?: number;
+  assists?: number;
   intensity?: string;
   duration_minutes?: number;
   calories?: number;
@@ -297,6 +298,11 @@ export default function SportsCalendar({ events, onNewEventOnDate }: SportsCalen
                     {ev.goals !== undefined && ev.goals > 0 && (
                       <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>
                         ⚽ {ev.goals} {ev.goals === 1 ? "gol" : "goles"}
+                      </span>
+                    )}
+                    {ev.assists !== undefined && ev.assists > 0 && (
+                      <span style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>
+                        👟 {ev.assists} {ev.assists === 1 ? "asistencia" : "asistencias"}
                       </span>
                     )}
                   </div>

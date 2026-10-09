@@ -7,6 +7,7 @@ export interface ActivityItem {
   time: string;
   result?: string;
   goals?: number;
+  assists?: number;
   intensity?: string;
   duration_minutes?: number;
   calories?: number;

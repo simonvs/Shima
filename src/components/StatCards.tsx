@@ -2,6 +2,7 @@ import { Target, TrendingUp, Flame, Heart, Activity } from "lucide-react";
 
 interface StatCardsProps {
   totalGoles: number;
+  totalAsistencias?: number;
   partidosCount: number;
   totalCalorias: number;
   avgHR: number | null;
@@ -11,6 +12,7 @@ interface StatCardsProps {
 
 export default function StatCards({
   totalGoles,
+  totalAsistencias = 0,
   partidosCount,
   totalCalorias,
   avgHR,
@@ -21,7 +23,7 @@ export default function StatCards({
     <div className="kpi-grid">
       <div className="kpi-card">
         <div className="kpi-header">
-          <span>Goles Totales</span>
+          <span>Goles y Asistencias</span>
           <div
             className="kpi-icon-wrap"
             style={{ background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)" }}
@@ -29,9 +31,14 @@ export default function StatCards({
             <Target size={18} />
           </div>
         </div>
-        <div className="kpi-val">{totalGoles}</div>
+        <div className="kpi-val" style={{ display: "flex", alignItems: "baseline", gap: "0.45rem", flexWrap: "wrap" }}>
+          <span>{totalGoles} <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 500 }}>goles</span></span>
+          <span style={{ fontSize: "1.15rem", color: "var(--accent-cyan)", fontWeight: 700 }}>
+            • {totalAsistencias} <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 500 }}>asist.</span>
+          </span>
+        </div>
         <div className="kpi-trend">
-          <TrendingUp size={14} /> En {partidosCount} partidos jugados
+          <TrendingUp size={14} /> En {partidosCount} partidos {totalAsistencias > 0 ? `(${totalGoles + totalAsistencias} G+A)` : ""}
         </div>
       </div>
 

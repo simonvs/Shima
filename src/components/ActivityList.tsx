@@ -124,6 +124,11 @@ export default function ActivityList({
                         ⚽ {ev.goals} {ev.goals === 1 ? "gol" : "goles"}
                       </span>
                     )}
+                    {ev.assists !== undefined && ev.assists > 0 && (
+                      <span className="bio-badge" style={{ color: "var(--accent-cyan)" }}>
+                        👟 {ev.assists} {ev.assists === 1 ? "asistencia" : "asistencias"}
+                      </span>
+                    )}
                     {ev.intensity && (
                       <span className="bio-badge">Intensidad: {ev.intensity}</span>
                     )}

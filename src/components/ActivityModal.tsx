@@ -41,6 +41,7 @@ export default function ActivityModal({
   const [rivalGoals, setRivalGoals] = useState("0");
   const [matchStatus, setMatchStatus] = useState<"played" | "pending">("played");
   const [personalGoals, setPersonalGoals] = useState("0");
+  const [personalAssists, setPersonalAssists] = useState("0");
   const [trainingIntensity, setTrainingIntensity] = useState("Media");
 
   // Métricas avanzadas / .FIT
@@ -97,6 +98,7 @@ export default function ActivityModal({
     setRivalGoals("0");
     setMatchStatus("played");
     setPersonalGoals("0");
+    setPersonalAssists("0");
     setTrainingIntensity("Media");
     setDurationMinutes("");
     setCalories("");
@@ -196,6 +198,7 @@ export default function ActivityModal({
       time: time || "18:00",
       result: eventType === "match" ? matchResult : undefined,
       goals: eventType === "match" ? (parseInt(personalGoals, 10) || 0) : 0,
+      assists: eventType === "match" ? (parseInt(personalAssists, 10) || 0) : 0,
       intensity: eventType === "training" ? trainingIntensity : undefined,
       duration_minutes: durationMinutes ? parseInt(durationMinutes, 10) : undefined,
       calories: calories ? parseInt(calories, 10) : undefined,
@@ -646,25 +649,152 @@ export default function ActivityModal({
                 </>
               )}
 
-              {/* Goles Personales */}
-              <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.06)", paddingTop: "0.6rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-main)", margin: 0 }}>
-                      ⚽ Tus Goles Personales
-                    </label>
-                    <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", margin: 0 }}>
-                      Goles anotados individualmente por ti en este partido
-                    </p>
+              {/* Rendimiento Individual: Goles y Asistencias */}
+              <div
+                style={{
+                  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                  paddingTop: "0.75rem",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "0.6rem",
+                }}
+              >
+                {/* Goles Personales */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "0.6rem 0.65rem",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      color: "var(--text-main)",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    ⚽ Tus Goles
+                  </label>
+                  <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", margin: "0 0 0.45rem 0" }}>
+                    Anotados por ti
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPersonalGoals(String(Math.max(0, (parseInt(personalGoals, 10) || 0) - 1)))}
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        border: "1px solid var(--border-color)",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "var(--text-main)",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                      }}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-input"
+                      style={{ width: "46px", textAlign: "center", padding: "0.2rem", fontSize: "1.05rem", fontWeight: 700 }}
+                      value={personalGoals}
+                      onChange={(e) => setPersonalGoals(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPersonalGoals(String((parseInt(personalGoals, 10) || 0) + 1))}
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        border: "1px solid var(--border-color)",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "var(--text-main)",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                      }}
+                    >
+                      +
+                    </button>
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    className="form-input"
-                    style={{ width: "65px", textAlign: "center", padding: "0.3rem" }}
-                    value={personalGoals}
-                    onChange={(e) => setPersonalGoals(e.target.value)}
-                  />
+                </div>
+
+                {/* Asistencias Personales */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "0.6rem 0.65rem",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      color: "var(--text-main)",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    👟 Asistencias
+                  </label>
+                  <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", margin: "0 0 0.45rem 0" }}>
+                    Pases de gol entregados
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPersonalAssists(String(Math.max(0, (parseInt(personalAssists, 10) || 0) - 1)))}
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        border: "1px solid var(--border-color)",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "var(--text-main)",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                      }}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-input"
+                      style={{ width: "46px", textAlign: "center", padding: "0.2rem", fontSize: "1.05rem", fontWeight: 700 }}
+                      value={personalAssists}
+                      onChange={(e) => setPersonalAssists(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPersonalAssists(String((parseInt(personalAssists, 10) || 0) + 1))}
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        border: "1px solid var(--border-color)",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "var(--text-main)",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

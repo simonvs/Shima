@@ -97,6 +97,8 @@ export default function ActivityZonesModal({
               </div>
               <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
                 {activity.title} • {activity.date}
+                {activity.goals !== undefined && activity.goals > 0 && ` • ⚽ ${activity.goals} ${activity.goals === 1 ? "gol" : "goles"}`}
+                {activity.assists !== undefined && activity.assists > 0 && ` • 👟 ${activity.assists} ${activity.assists === 1 ? "asistencia" : "asistencias"}`}
               </p>
             </div>
           </div>
